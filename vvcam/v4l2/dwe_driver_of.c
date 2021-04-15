@@ -60,6 +60,7 @@
 #include <linux/debugfs.h>
 #include <linux/of_device.h>
 #include <linux/sched_clock.h>
+#include <linux/version.h>
 
 #include <linux/videodev2.h>
 #include <media/v4l2-ctrls.h>
@@ -162,7 +163,9 @@ static struct v4l2_subdev_ops dwe_v4l2_subdev_ops = {
 
 int dwe_hw_probe(struct platform_device *pdev)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	struct device *dev = &pdev->dev;
+#endif
 	struct dwe_device *dwe_dev;
 	struct resource *mem_res;
 #ifdef ENABLE_IRQ
@@ -177,6 +180,7 @@ int dwe_hw_probe(struct platform_device *pdev)
 		goto end;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	dwe_dev->clk_core = devm_clk_get(dev, "core");
 	if (IS_ERR(dwe_dev->clk_core)) {
 		rc = PTR_ERR(dwe_dev->clk_core);
@@ -197,6 +201,7 @@ int dwe_hw_probe(struct platform_device *pdev)
 		dev_err(dev, "can't get ahb clock: %d\n", rc);
 		return rc;
 	}
+#endif
 
 	v4l2_subdev_init(&dwe_dev->sd, &dwe_v4l2_subdev_ops);
 	snprintf(dwe_dev->sd.name, sizeof(dwe_dev->sd.name), DEVICE_NAME);
