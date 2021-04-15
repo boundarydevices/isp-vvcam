@@ -6,17 +6,17 @@
  */
 
 #include <linux/ctype.h>
+#include <linux/delay.h>
 #include <linux/device.h>
-#include <linux/of_graph.h>
+#include <linux/i2c.h>
 #include <linux/init.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
+#include <linux/of_graph.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
-#include <linux/delay.h>
-#include <linux/i2c.h>
-#include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/v4l2-mediabus.h>
 #include <media/v4l2-async.h>
@@ -27,17 +27,16 @@
 #include "basler-camera-driver-vvcam.h"
 #include "vvsensor.h"
 
-/*global variable*/
-static struct register_access ra_tmp;
-
-
-/* compact name as v4l2_capability->driver is limited to 16 characters */
 #ifdef CONFIG_BASLER_CAMERA_VVCAM
+/* compact name as v4l2_capability->driver is limited to 16 characters */
 #define SENSOR_NAME "basler-vvcam"
+#define STR_BASLER "basler-camera-vvcam"
+#define BASLER_DRIVER basler_camera_i2c_driver_vvcam
 #else
 #define SENSOR_NAME "basler-camera"
+#define STR_BASLER "basler-camera"
+#define BASLER_DRIVER basler_camera_i2c_driver
 #endif
-
 
 /*
  * ABRM register offsets
@@ -70,21 +69,24 @@ static struct register_access ra_tmp;
  */
 #define I2C_MAXIMUM_READ_BURST	8
 
-
-
-static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address);
+static int basler_read_register_chunk(struct i2c_client *client, u8 *buffer,
+				      u8 buffer_size, u16 register_address);
 
 static int basler_camera_s_ctrl(struct v4l2_ctrl *ctrl);
 static int basler_camera_g_volatile_ctrl(struct v4l2_ctrl *ctrl);
-static int basler_camera_validate(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr);
-static void basler_camera_init(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr);
-static bool basler_camera_equal(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr1, union v4l2_ctrl_ptr ptr2);
+static int basler_camera_validate(const struct v4l2_ctrl *ctrl, u32 idx,
+				  union v4l2_ctrl_ptr ptr);
+static void basler_camera_init(const struct v4l2_ctrl *ctrl, u32 idx,
+			       union v4l2_ctrl_ptr ptr);
+static bool basler_camera_equal(const struct v4l2_ctrl *ctrl, u32 idx,
+				union v4l2_ctrl_ptr ptr1,
+				union v4l2_ctrl_ptr ptr2);
 
 struct basler_camera_dev {
 	struct i2c_client *i2c_client;
-	struct v4l2_device  *v4l2_dev;
 	struct v4l2_subdev sd;
 	struct media_pad pad;
+	struct v4l2_mbus_framefmt format;
 
 	/* lock to protect all members below */
 	struct mutex lock;
@@ -94,47 +96,59 @@ struct basler_camera_dev {
 
 	struct basler_device_information device_information;
 
+	/* Storage for register address and data size for register reads */
+	struct register_access ra_tmp;
 	int csi;
 };
 
 /**
  * basler_write_burst - issue a burst I2C message in master transmit mode
  * @client: Handle to slave device
- * @ra_p: Data structure that hold the register address and data that will be written to the slave
+ * @ra_p: Data structure that hold the register address and data that will be
+ *	written to the slave
  *
  * Returns negative errno, or else the number of bytes written.
  */
-static int basler_write_burst(struct i2c_client *client,
+static int basler_write_burst(struct basler_camera_dev *sensor,
 			      struct register_access *ra_p)
 {
+	struct i2c_client *client = sensor->i2c_client;
+	unsigned int size;
 	int ret;
-	__u16 old_address;
+	u16 old_address;
 
-	if (ra_p->data_size > sizeof(ra_p->data)){
-		dev_err(&client->dev, "i2c burst array too big, max allowed %lu, got %d\n", sizeof(ra_p->data), ra_p->data_size);
+	if (unlikely(ra_p->data_size > sizeof(ra_p->data))) {
+		dev_err(&client->dev,
+			"i2c burst array too big, max allowed %lu, got %d\n",
+			sizeof(ra_p->data), ra_p->data_size);
 		return -EINVAL;
 	}
 
 	old_address = ra_p->address;
 	ra_p->address = cpu_to_be16(ra_p->address);
 
-	if (I2CREAD == (ra_p->command | I2CREAD)){
-		ra_tmp.address = ra_p->address;
-		ra_tmp.data_size = ra_p->data_size;
+	if (I2CREAD == (ra_p->command | I2CREAD)) {
+		sensor->ra_tmp.address = ra_p->address;
+		sensor->ra_tmp.data_size = ra_p->data_size;
 		old_address = ra_p->address;
 		return ra_p->data_size;
 	}
-	else if(I2CWRITE == (ra_p->command | I2CWRITE)){
-		ret = i2c_master_send(client, (char *)ra_p, ra_p->data_size + sizeof(ra_p->address));
 
-		if(ret)
-			ra_p->data_size = ret;
+	if (I2CWRITE == (ra_p->command | I2CWRITE)) {
+		size = ra_p->data_size + sizeof(ra_p->address);
+		ret = i2c_master_send(client, (char *)ra_p, size);
+		if (unlikely(ret < 0))
+			return ret;
 
+		if (unlikely(ret != size))
+			return -EIO;
+
+		ra_p->data_size = ret;
 		old_address = ra_p->address;
 		return ret;
 	}
-	else
-		return -EPERM;
+
+	return -EPERM;
 }
 
 /**
@@ -147,14 +161,15 @@ static int basler_write_burst(struct i2c_client *client,
  *
  * Returns negative errno, or else the number of bytes written.
  */
-static int basler_read_burst(struct i2c_client *client,
-		struct register_access *ra_p)
+static int basler_read_burst(struct basler_camera_dev *sensor,
+			     struct register_access *ra_p)
 {
+	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 
-	ret = basler_read_register_chunk(client, ra_p->data, ra_tmp.data_size,
-									ra_tmp.address);
-	if (ret < 0)
+	ret = basler_read_register_chunk(client, ra_p->data,
+			sensor->ra_tmp.data_size, sensor->ra_tmp.address);
+	if (unlikely(ret < 0))
 		ra_p->data_size = 0;
 	else
 		ra_p->data_size = ret;
@@ -162,15 +177,15 @@ static int basler_read_burst(struct i2c_client *client,
 	return ret;
 }
 
-
-static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address)
+static int basler_read_register_chunk(struct i2c_client *client, u8 *buffer,
+				      u8 buffer_size, u16 register_address)
 {
 	struct i2c_msg msgs[2] = {};
 	int ret = 0;
 
 	msgs[0].addr = client->addr;
 	msgs[0].flags = 0;
-	msgs[0].buf = (__u8 *)&register_address;
+	msgs[0].buf = (u8 *)&register_address;
 	msgs[0].len = sizeof(register_address);
 
 	msgs[1].addr = client->addr;
@@ -179,12 +194,12 @@ static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, _
 	msgs[1].len = buffer_size;
 
 	ret = i2c_transfer(client->adapter, msgs, 2);
-	if (ret < 0) {
+	if (unlikely(ret < 0)) {
 		pr_err("i2c_transfer() failed: %d\n", ret);
 		return ret;
 	}
 
-	if (ret != 2) {
+	if (unlikely(ret != 2)) {
 		pr_err("i2c_transfer() incomplete");
 		return -EIO;
 	}
@@ -192,22 +207,26 @@ static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, _
 	return msgs[1].len;
 }
 
-static int basler_read_register(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address)
+static int basler_read_register(struct i2c_client *client, u8 *buffer,
+				u8 buffer_size, u16 register_address)
 {
 	int ret = 0;
-	__u8 l_read_bytes = 0;
+	u8 l_read_bytes = 0;
 
 	do {
-		__be16 l_register_address = cpu_to_be16(register_address + l_read_bytes);
+		__be16 l_register_address =
+			cpu_to_be16(register_address + l_read_bytes);
 
-		ret = basler_read_register_chunk(client, (__u8*) buffer + l_read_bytes, (__u8) min(I2C_MAXIMUM_READ_BURST, ((int)buffer_size - l_read_bytes)), l_register_address);
-		if (ret < 0)
-		{
-			pr_err("basler_read_register_chunk() failed: %d\n", ret);
+		ret = basler_read_register_chunk(
+			client, (u8 *)buffer + l_read_bytes,
+			(u8)min(I2C_MAXIMUM_READ_BURST,
+				  ((int)buffer_size - l_read_bytes)),
+			l_register_address);
+		if (unlikely(ret < 0)) {
+			pr_err("basler_read_register_chunk() failed: %d\n",
+			       ret);
 			return ret;
-		}
-		else if (ret == 0)
-		{
+		} else if (unlikely(ret == 0)) {
 			pr_err("basler_read_register_chunk() read 0 bytes.\n");
 			return -EIO;
 		}
@@ -218,170 +237,165 @@ static int basler_read_register(struct i2c_client* client, __u8* buffer, __u8 bu
 	return l_read_bytes;
 }
 
-
-static int basler_retrieve_device_information(struct i2c_client* client, struct basler_device_information* bdi)
+static int
+basler_retrieve_device_information(struct i2c_client *client,
+				   struct basler_device_information *bdi)
 {
 	int ret = 0;
-	__u64 deviceCapabilities = 0;
+	u64 deviceCapabilities = 0;
 	__be64 deviceCapabilitiesBe = 0;
-	__u32 gencpVersionBe = 0;
+	__be32 gencpVersionBe = 0;
 
 	bdi->_magic = BDI_MAGIC;
 
-	ret = basler_read_register(client, (__u8*) &deviceCapabilitiesBe, sizeof(deviceCapabilitiesBe), ABRM_DEVICE_CAPABILITIES);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, (u8 *)&deviceCapabilitiesBe,
+				   sizeof(deviceCapabilitiesBe),
+				   ABRM_DEVICE_CAPABILITIES);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == sizeof(deviceCapabilitiesBe))
-	{
+	} else if (likely(ret == sizeof(deviceCapabilitiesBe))) {
 		deviceCapabilities = be64_to_cpu(deviceCapabilitiesBe);
 		pr_debug("deviceCapabilities = 0x%llx\n", deviceCapabilities);
-		pr_debug("String Encoding = 0x%llx\n", (deviceCapabilities & ABRM_DEVICE_CAPABILITIES_STRING_ENCODING) >> 4);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+		pr_debug("String Encoding = 0x%llx\n",
+			 (deviceCapabilities &
+			  ABRM_DEVICE_CAPABILITIES_STRING_ENCODING) >>
+				 4);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
-	ret = basler_read_register(client, (__u8*) &gencpVersionBe, sizeof(gencpVersionBe), ABRM_GENCP_VERSION);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, (u8 *)&gencpVersionBe,
+				   sizeof(gencpVersionBe), ABRM_GENCP_VERSION);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == sizeof(gencpVersionBe))
-	{
+	} else if (likely(ret == sizeof(gencpVersionBe))) {
 		bdi->gencpVersion = be32_to_cpu(gencpVersionBe);
-		pr_debug("l_gencpVersion = %d.%d\n", (bdi->gencpVersion & 0xffff0000) >> 16, bdi->gencpVersion & 0xffff);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+		pr_debug("l_gencpVersion = %d.%d\n",
+			 (bdi->gencpVersion & 0xffff0000) >> 16,
+			 bdi->gencpVersion & 0xffff);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
-	ret = basler_read_register(client, bdi->deviceVersion, GENCP_STRING_BUFFER_SIZE, ABRM_DEVICE_VERSION);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, bdi->deviceVersion,
+				   GENCP_STRING_BUFFER_SIZE,
+				   ABRM_DEVICE_VERSION);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == GENCP_STRING_BUFFER_SIZE)
-	{
+	} else if (likely(ret == GENCP_STRING_BUFFER_SIZE)) {
 		pr_debug("bdi->deviceVersion = %s\n", bdi->deviceVersion);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
-	ret = basler_read_register(client, bdi->serialNumber, GENCP_STRING_BUFFER_SIZE, ABRM_SERIAL_NUMBER);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, bdi->serialNumber,
+				   GENCP_STRING_BUFFER_SIZE,
+				   ABRM_SERIAL_NUMBER);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == GENCP_STRING_BUFFER_SIZE)
-	{
+	} else if (likely(ret == GENCP_STRING_BUFFER_SIZE)) {
 		pr_debug("bdi->serialNumber = %s\n", bdi->serialNumber);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
-	ret = basler_read_register(client, bdi->manufacturerName, GENCP_STRING_BUFFER_SIZE, ABRM_MANUFACTURER_NAME);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, bdi->manufacturerName,
+				   GENCP_STRING_BUFFER_SIZE,
+				   ABRM_MANUFACTURER_NAME);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == GENCP_STRING_BUFFER_SIZE)
-	{
+	} else if (likely(ret == GENCP_STRING_BUFFER_SIZE)) {
 		pr_debug("bdi->manufacturerName = %s\n", bdi->manufacturerName);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
-	ret = basler_read_register(client, bdi->modelName, GENCP_STRING_BUFFER_SIZE, ABRM_MODEL_NAME);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, bdi->modelName,
+				   GENCP_STRING_BUFFER_SIZE, ABRM_MODEL_NAME);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == GENCP_STRING_BUFFER_SIZE)
-	{
+	} else if (likely(ret == GENCP_STRING_BUFFER_SIZE)) {
 		pr_debug("bdi->modelName = %s\n", bdi->modelName);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
-	if (deviceCapabilities & ABRM_DEVICE_CAPABILITIES_FAMILY_NAME)
-	{
-		ret = basler_read_register(client, bdi->familyName, GENCP_STRING_BUFFER_SIZE, ABRM_FAMILY_NAME);
-		if (ret < 0)
-		{
+	if (deviceCapabilities & ABRM_DEVICE_CAPABILITIES_FAMILY_NAME) {
+		ret = basler_read_register(client, bdi->familyName,
+					   GENCP_STRING_BUFFER_SIZE,
+					   ABRM_FAMILY_NAME);
+		if (unlikely(ret < 0)) {
 			pr_err("basler_read_register() failed: %d\n", ret);
 			return ret;
-		}
-		else if (ret == GENCP_STRING_BUFFER_SIZE)
-		{
+		} else if (likely(ret == GENCP_STRING_BUFFER_SIZE)) {
 			pr_debug("bdi->familyName = %s\n", bdi->familyName);
-		}
-		else {
-			pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+		} else {
+			pr_err("basler_read_register() not read full buffer = %d bytes\n",
+			       ret);
 			return -EIO;
 		}
-	}
-	else
+	} else
 		pr_notice("ABRM FamilyName not supported\n");
 
-	if (deviceCapabilities & ABRM_DEVICE_CAPABILITIES_USER_DEFINED_NAMES_SUPPORT)
-	{
-		ret = basler_read_register(client, bdi->userDefinedName, GENCP_STRING_BUFFER_SIZE, ABRM_USER_DEFINED_NAME);
-		if (ret < 0)
-		{
+	if (deviceCapabilities &
+	    ABRM_DEVICE_CAPABILITIES_USER_DEFINED_NAMES_SUPPORT) {
+		ret = basler_read_register(client, bdi->userDefinedName,
+					   GENCP_STRING_BUFFER_SIZE,
+					   ABRM_USER_DEFINED_NAME);
+		if (ret < 0) {
 			pr_err("basler_read_register() failed: %d\n", ret);
 			return ret;
-		}
-		else if (ret == GENCP_STRING_BUFFER_SIZE)
-		{
-			pr_debug("bdi->userDefinedName = %s\n", bdi->userDefinedName);
-		}
-		else {
-			pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+		} else if (ret == GENCP_STRING_BUFFER_SIZE) {
+			pr_debug("bdi->userDefinedName = %s\n",
+				 bdi->userDefinedName);
+		} else {
+			pr_err("basler_read_register() not read full buffer = %d bytes\n",
+			       ret);
 			return -EIO;
 		}
-	}
-	else
+	} else
 		pr_notice("ABRM UserDefinedName not supported\n");
 
-	ret = basler_read_register(client, bdi->manufacturerInfo, GENCP_STRING_BUFFER_SIZE, ABRM_MANUFACTURER_INFO);
-	if (ret < 0)
-	{
+	ret = basler_read_register(client, bdi->manufacturerInfo,
+				   GENCP_STRING_BUFFER_SIZE,
+				   ABRM_MANUFACTURER_INFO);
+	if (unlikely(ret < 0)) {
 		pr_err("basler_read_register() failed: %d\n", ret);
 		return ret;
-	}
-	else if (ret == GENCP_STRING_BUFFER_SIZE)
-	{
+	} else if (likely(ret == GENCP_STRING_BUFFER_SIZE)) {
 		pr_debug("bdi->manufacturerInfo = %s\n", bdi->manufacturerInfo);
-	}
-	else {
-		pr_err("basler_read_register() not read full buffer = %d bytes\n", ret);
+	} else {
+		pr_err("basler_read_register() not read full buffer = %d bytes\n",
+		       ret);
 		return -EIO;
 	}
 
 	/*
 	 * If the strings are in ASCII - print it.
 	 */
-	if (((deviceCapabilities & ABRM_DEVICE_CAPABILITIES_STRING_ENCODING) >> 4) == 0)
-	{
-		pr_info("ABRM: Manufacturer: %s, Model: %s, Device: %s, Serial: %s\n", bdi->manufacturerName, bdi->modelName, bdi->deviceVersion, bdi->serialNumber);
+	if (((deviceCapabilities & ABRM_DEVICE_CAPABILITIES_STRING_ENCODING) >>
+	     4) == 0) {
+		pr_info("ABRM: Manufacturer: %s, Model: %s, Device: %s, Serial: %s\n",
+			bdi->manufacturerName, bdi->modelName,
+			bdi->deviceVersion, bdi->serialNumber);
 	}
 
 	return 0;
@@ -389,93 +403,101 @@ static int basler_retrieve_device_information(struct i2c_client* client, struct 
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4,19,0) // since 4.19.0-rc1
 static int basler_retrieve_csi_information(struct basler_camera_dev *sensor,
-					   struct basler_csi_information* bci)
+					   struct basler_csi_information *bci)
 {
-	struct v4l2_fwnode_endpoint bus_cfg = { .bus_type = V4L2_MBUS_CSI2_DPHY };
 	struct device *dev = &sensor->i2c_client->dev;
 	struct device_node *ep;
-	int ret;
+	struct v4l2_fwnode_endpoint bus_cfg = {
+		.bus_type = V4L2_MBUS_CSI2_DPHY,
+	};
+	int ret = 0;
+	unsigned short i;
 
 	/* We need a function that searches for the device that holds
 	 * the csi-2 bus information. For now we put the bus information
 	 * also into the sensor endpoint itself.
 	 */
 	ep = of_graph_get_next_endpoint(dev->of_node, NULL);
-	if (!ep) {
+	if (unlikely(!ep)) {
 		dev_err(dev, "missing endpoint node\n");
 		return -ENODEV;
 	}
 
-        ret = v4l2_fwnode_endpoint_alloc_parse(of_fwnode_handle(ep), &bus_cfg);
+	ret = v4l2_fwnode_endpoint_alloc_parse(of_fwnode_handle(ep), &bus_cfg);
 	of_node_put(ep);
-	if (ret) {
+	if (unlikely(ret)) {
 		dev_err(dev, "failed to parse endpoint\n");
-		return ret;
+		goto done;
 	}
 
-	if (bus_cfg.bus_type != V4L2_MBUS_CSI2_DPHY ||
+	if (unlikely(bus_cfg.bus_type != V4L2_MBUS_CSI2_DPHY ||
 	    bus_cfg.bus.mipi_csi2.num_data_lanes == 0 ||
-	    bus_cfg.nr_of_link_frequencies == 0) {
+	    bus_cfg.nr_of_link_frequencies == 0)) {
 		dev_err(dev, "missing CSI-2 properties in endpoint\n");
 		ret = -ENODATA;
-	} else {
-		int i;
-		bci->max_lane_frequency = bus_cfg.link_frequencies[0];
-		bci->lane_count = bus_cfg.bus.mipi_csi2.num_data_lanes;
-		for (i = 0; i < bus_cfg.bus.mipi_csi2.num_data_lanes; ++i) {
-			bci->lane_assignment[i] = bus_cfg.bus.mipi_csi2.data_lanes[i];
-		}
-		ret = 0;
+		goto done;
 	}
+
+	bci->max_lane_frequency = bus_cfg.link_frequencies[0];
+	bci->lane_count = bus_cfg.bus.mipi_csi2.num_data_lanes;
+	for (i = 0; i < bus_cfg.bus.mipi_csi2.num_data_lanes; ++i) {
+		bci->lane_assignment[i] = bus_cfg.bus.mipi_csi2.data_lanes[i];
+	}
+
+done:
+	v4l2_fwnode_endpoint_free(&bus_cfg);
 	return ret;
 }
 #else
 static int basler_retrieve_csi_information(struct basler_camera_dev *sensor,
-					   struct basler_csi_information* bci)
+					   struct basler_csi_information *bci)
 {
 	struct device *dev = &sensor->i2c_client->dev;
 	struct v4l2_fwnode_endpoint *endpoint;
 	struct device_node *ep;
-	int ret;
+	int ret = 0;
+	unsigned short i;
 
 	/* We need a function that searches for the device that holds
 	 * the csi-2 bus information. For now we put the bus information
 	 * also into the sensor endpoint itself.
 	 */
 	ep = of_graph_get_next_endpoint(dev->of_node, NULL);
-	if (!ep) {
+	if (unlikely(!ep)) {
 		dev_err(dev, "missing endpoint node\n");
 		return -ENODEV;
 	}
 
 	endpoint = v4l2_fwnode_endpoint_alloc_parse(of_fwnode_handle(ep));
 	of_node_put(ep);
-	if (IS_ERR(endpoint)) {
+	if (unlikely(IS_ERR(endpoint))) {
 		dev_err(dev, "failed to parse endpoint\n");
 		return PTR_ERR(endpoint);
 	}
 
-	if (endpoint->bus_type != V4L2_MBUS_CSI2 ||
+	if (unlikely(endpoint->bus_type != V4L2_MBUS_CSI2 ||
 	    endpoint->bus.mipi_csi2.num_data_lanes == 0 ||
-	    endpoint->nr_of_link_frequencies == 0) {
+	    endpoint->nr_of_link_frequencies == 0)) {
 		dev_err(dev, "missing CSI-2 properties in endpoint\n");
 		ret = -ENODATA;
-	} else {
-		int i;
-		bci->max_lane_frequency = endpoint->link_frequencies[0];
-		bci->lane_count = endpoint->bus.mipi_csi2.num_data_lanes;
-		for (i = 0; i < endpoint->bus.mipi_csi2.num_data_lanes; ++i) {
-			bci->lane_assignment[i] = endpoint->bus.mipi_csi2.data_lanes[i];
-		}
-		ret = 0;
+		goto done;
 	}
 
+	bci->max_lane_frequency = endpoint->link_frequencies[0];
+	bci->lane_count = endpoint->bus.mipi_csi2.num_data_lanes;
+	for (i = 0; i < endpoint->bus.mipi_csi2.num_data_lanes; ++i) {
+		bci->lane_assignment[i] =
+			endpoint->bus.mipi_csi2.data_lanes[i];
+	}
+
+done:
 	v4l2_fwnode_endpoint_free(endpoint);
 	return ret;
 }
 #endif
 
-static inline struct basler_camera_dev *to_basler_camera_dev(struct v4l2_subdev *sd)
+static inline struct basler_camera_dev *
+to_basler_camera_dev(struct v4l2_subdev *sd)
 {
 	return container_of(sd, struct basler_camera_dev, sd);
 }
@@ -483,7 +505,8 @@ static inline struct basler_camera_dev *to_basler_camera_dev(struct v4l2_subdev 
 static inline struct v4l2_subdev *ctrl_to_sd(struct v4l2_ctrl *ctrl)
 {
 	return &container_of(ctrl->handler, struct basler_camera_dev,
-			     ctrl_handler)->sd;
+			     ctrl_handler)
+			->sd;
 }
 
 /**
@@ -497,6 +520,40 @@ static int basler_camera_set_fmt(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_pad_config *cfg,
 				 struct v4l2_subdev_format *format)
 {
+	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
+
+	if (format->pad)
+		return -EINVAL;
+
+	mutex_lock(&sensor->lock);
+
+	sensor->format = format->format;
+
+	mutex_unlock(&sensor->lock);
+
+	return 0;
+}
+
+/**
+ * basler_camera_get_fmt - Get current format
+ *
+ * Returns always zero
+ */
+static int basler_camera_get_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_format *format)
+{
+	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
+
+	if (format->pad)
+		return -EINVAL;
+
+	mutex_lock(&sensor->lock);
+
+	format->format = sensor->format;
+
+	mutex_unlock(&sensor->lock);
+
 	return 0;
 }
 
@@ -536,7 +593,7 @@ static int basler_ioc_qcap(struct basler_camera_dev *sensor, void *args)
 	if(sensor->i2c_client->adapter)
 	{
 		//bus_info[8]-i2c bus dev number
-		cap->bus_info[VVCAM_CAP_BUS_INFO_I2C_ADAPTER_NR_POS] = (__u8)sensor->i2c_client->adapter->nr;
+		cap->bus_info[VVCAM_CAP_BUS_INFO_I2C_ADAPTER_NR_POS] = (u8)sensor->i2c_client->adapter->nr;
 	}
 	else
 	{
@@ -573,7 +630,6 @@ error: ignoring return value of function declared with 'warn_unused_result' attr
 #define USER_TO_KERNEL(TYPE)
 #define KERNEL_TO_USER(TYPE)
 #endif
-
 
 static long basler_camera_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg_user)
 {
@@ -668,6 +724,7 @@ static const struct v4l2_subdev_video_ops basler_camera_video_ops = {
 
 static const struct v4l2_subdev_pad_ops basler_camera_pad_ops = {
 	.set_fmt = basler_camera_set_fmt,
+	.get_fmt = basler_camera_get_fmt,
 };
 
 static const struct v4l2_subdev_ops basler_camera_subdev_ops = {
@@ -694,7 +751,8 @@ static const struct v4l2_ctrl_type_ops basler_camera_ctrl_type_ops = {
  *
  * Returns always zero
  */
-static int basler_camera_validate(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr )
+static int basler_camera_validate(const struct v4l2_ctrl *ctrl, u32 idx,
+				  union v4l2_ctrl_ptr ptr)
 {
 	return 0;
 }
@@ -705,7 +763,8 @@ static int basler_camera_validate(const struct v4l2_ctrl *ctrl, u32 idx, union v
  * Note: Not needed by access-register control
  *
  */
-static void basler_camera_init(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr )
+static void basler_camera_init(const struct v4l2_ctrl *ctrl, u32 idx,
+			       union v4l2_ctrl_ptr ptr)
 {
 }
 
@@ -716,20 +775,34 @@ static void basler_camera_init(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2
  *
  * Returns always zero
  */
-static bool basler_camera_equal(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr1, union v4l2_ctrl_ptr ptr2 )
+static bool basler_camera_equal(const struct v4l2_ctrl *ctrl, u32 idx,
+				union v4l2_ctrl_ptr ptr1,
+				union v4l2_ctrl_ptr ptr2)
 {
 	return 0;
 }
+
+/* We need to define a new V4L2_CTRL_TYPE value that does not collide
+ * with an existing one.
+ *
+ * The basic V4L2_CTRL_TYPE_XXX values are defined in linux/videodev2.h
+ * as enum v4l2_ctrl_type, but several other headers extend these
+ * definitions by adding more values through #defines. There seems to be
+ * no central coordination facility to avoid collisions when doing so.
+ * Therefore, the best we can do is selecting some obscure random value,
+ * cross our fingers and hope for the best.
+ */
+#define V4L2_CTRL_TYPE_UNIQUE	(0x370de8ca)
 
 static const struct v4l2_ctrl_config ctrl_access_register = {
 	.ops = &basler_camera_ctrl_ops,
 	.type_ops = &basler_camera_ctrl_type_ops,
 	.id = V4L2_CID_BASLER_ACCESS_REGISTER,
 	.name = "basler-access-register",
-	.type = V4L2_CTRL_TYPE_U32+1,
+	.type = V4L2_CTRL_TYPE_UNIQUE,
 	.flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE | V4L2_CTRL_FLAG_VOLATILE,
 	.step = 1,
-	.dims = {1},
+	.dims = { 1 },
 	.elem_size = sizeof(struct register_access),
 };
 
@@ -738,10 +811,10 @@ static const struct v4l2_ctrl_config ctrl_basler_device_information = {
 	.type_ops = &basler_camera_ctrl_type_ops,
 	.id = V4L2_CID_BASLER_DEVICE_INFORMATION,
 	.name = "basler-device-information",
-	.type = V4L2_CTRL_TYPE_U32+1,
+	.type = V4L2_CTRL_TYPE_UNIQUE,
 	.flags = V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_VOLATILE,
 	.step = 1,
-	.dims = {1},
+	.dims = { 1 },
 	.elem_size = sizeof(struct basler_device_information),
 };
 
@@ -754,7 +827,8 @@ static const struct v4l2_ctrl_config ctrl_basler_interface_version = {
 	.flags = V4L2_CTRL_FLAG_READ_ONLY,
 	.min = 0x0,
 	.max = 0xffffffff,
-	.def = (BASLER_INTERFACE_VERSION_MAJOR << 16) | BASLER_INTERFACE_VERSION_MINOR,
+	.def = (BASLER_INTERFACE_VERSION_MAJOR << 16) |
+	       BASLER_INTERFACE_VERSION_MINOR,
 	.step = 1,
 };
 
@@ -763,10 +837,10 @@ static const struct v4l2_ctrl_config ctrl_basler_csi_information = {
 	.type_ops = &basler_camera_ctrl_type_ops,
 	.id = V4L2_CID_BASLER_CSI_INFORMATION,
 	.name = "basler-csi-information",
-	.type = V4L2_CTRL_TYPE_U32+1,
+	.type = V4L2_CTRL_TYPE_UNIQUE,
 	.flags = V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_VOLATILE,
 	.step = 1,
-	.dims = {1},
+	.dims = { 1 },
 	.elem_size = sizeof(struct basler_csi_information),
 };
 
@@ -774,22 +848,24 @@ static int basler_camera_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
 	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
-	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 	struct register_access *fp_ra_new;
 
 	switch (ctrl->id) {
 	case V4L2_CID_BASLER_ACCESS_REGISTER:
 
-		if (ctrl->elem_size != sizeof(struct register_access))
+		if (unlikely(ctrl->elem_size != sizeof(struct register_access))) {
+			dev_err(sd->dev,
+				"%s: size mismatch V4L2_CID_BASLER_ACCESS_REGISTER: elem = %u, expected = %zu",
+				__func__, ctrl->elem_size, sizeof(struct register_access));
 			return -ENOMEM;
+		}
 
-		fp_ra_new = (struct register_access*) ctrl->p_new.p;
-		if(basler_write_burst(client, fp_ra_new))
-			ret = 0;
-		else
-			ret = -EIO;
-
+		fp_ra_new = (struct register_access *)ctrl->p_new.p;
+		ret = basler_write_burst(sensor, fp_ra_new);
+		if (unlikely(ret < 0))
+			return -EIO;
+		ret = 0;
 		break;
 
 	default:
@@ -804,52 +880,55 @@ static int basler_camera_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
 	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
-	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 	struct register_access *fp_ra_new = NULL;
-	struct basler_device_information* l_bdi = NULL;
+	struct basler_device_information *l_bdi = NULL;
 
 	switch (ctrl->id) {
 	case V4L2_CID_BASLER_ACCESS_REGISTER:
 
-		fp_ra_new = (struct register_access*) ctrl->p_new.p;
+		fp_ra_new = (struct register_access *)ctrl->p_new.p;
 
-		if (ctrl->elem_size == sizeof(struct register_access))
-		{
-			if(basler_read_burst(client, fp_ra_new))
+		if (likely(ctrl->elem_size == sizeof(struct register_access))) {
+			if (basler_read_burst(sensor, fp_ra_new))
 				ret = 0;
 			else
 				ret = -EIO;
-		}
-		else {
+		} else {
+			dev_err(sd->dev,
+				"%s: size mismatch V4L2_CID_BASLER_ACCESS_REGISTER: elem = %u, expected = %zu",
+				__func__, ctrl->elem_size, sizeof(struct register_access));
 			ret = -ENOMEM;
 		}
 		break;
 
 	case V4L2_CID_BASLER_DEVICE_INFORMATION:
 
-		l_bdi = (struct basler_device_information*) ctrl->p_new.p;
+		l_bdi = (struct basler_device_information *)ctrl->p_new.p;
 
-		if (ctrl->elem_size == sizeof(struct basler_device_information))
-		{
-			memcpy(l_bdi, &sensor->device_information, sizeof(struct basler_device_information));
+		if (likely(ctrl->elem_size ==
+		    sizeof(struct basler_device_information))) {
+			memcpy(l_bdi, &sensor->device_information,
+			       sizeof(struct basler_device_information));
 			ret = 0;
-		}
-		else
-		{
+		} else {
+			dev_err(sd->dev,
+				"%s: size mismatch V4L2_CID_BASLER_DEVICE_INFORMATION: elem = %u, expected = %zu",
+				__func__, ctrl->elem_size, sizeof(struct basler_device_information));
 			ret = -ENOMEM;
 		}
 		break;
 
 	case V4L2_CID_BASLER_CSI_INFORMATION:
-		if (ctrl->elem_size == sizeof(struct basler_csi_information))
-		{
-			struct basler_csi_information* l_bci = NULL;
-			l_bci = (struct basler_csi_information*) ctrl->p_new.p;
+		if (likely(ctrl->elem_size == sizeof(struct basler_csi_information))) {
+			struct basler_csi_information *l_bci = NULL;
+
+			l_bci = (struct basler_csi_information *)ctrl->p_new.p;
 			ret = basler_retrieve_csi_information(sensor, l_bci);
-		}
-		else
-		{
+		} else {
+			dev_err(sd->dev,
+				"%s: size mismatch V4L2_CID_BASLER_CSI_INFORMATION: elem = %u, expected = %zu",
+				__func__, ctrl->elem_size, sizeof(struct basler_csi_information));
 			ret = -ENOMEM;
 		}
 		break;
@@ -861,7 +940,6 @@ static int basler_camera_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 
 	return ret;
 }
-
 
 /**
  * basler_camera_link_setup
@@ -881,56 +959,48 @@ static const struct media_entity_operations basler_camera_sd_media_ops = {
 	.link_setup = basler_camera_link_setup,
 };
 
+static int basler_camera_alloc_control(struct v4l2_ctrl_handler *hdl,
+				       const struct v4l2_ctrl_config *cfg,
+				       struct device *dev)
+{
+	struct v4l2_ctrl *ctrl;
+	int ret = 0;
+
+	ctrl = v4l2_ctrl_new_custom(hdl, cfg, NULL);
+	if (unlikely(ctrl == NULL)) {
+		dev_err(dev,
+			"Registering ctrl %s failed: %d\n",
+			cfg->name,
+			hdl->error);
+		ret = hdl->error;
+	}
+
+	return ret;
+}
 
 static int basler_camera_init_controls(struct basler_camera_dev *sensor)
 {
 	struct v4l2_ctrl_handler *hdl = &sensor->ctrl_handler;
-	int ret;
 
 	v4l2_ctrl_handler_init(hdl, 32);
 
 	/* we can use our own mutex for the ctrl lock */
 	hdl->lock = &sensor->lock;
 
-	v4l2_ctrl_new_custom(hdl, &ctrl_access_register, NULL);
-	if (hdl->error)
-	{
-		dev_err(&sensor->i2c_client->dev, "Register ctrl access_register failed: %d\n", hdl->error);
-		ret = hdl->error;
-		goto free_ctrls;
-	}
-
-	v4l2_ctrl_new_custom(hdl, &ctrl_basler_device_information, NULL);
-	if (hdl->error)
-	{
-		dev_err(&sensor->i2c_client->dev, "Register ctrl device_information failed: %d\n", hdl->error);
-		ret = hdl->error;
-		goto free_ctrls;
-	}
-
-	v4l2_ctrl_new_custom(hdl, &ctrl_basler_interface_version, NULL);
-	if (hdl->error)
-	{
-		dev_err(&sensor->i2c_client->dev, "Register ctrl interface_version failed: %d\n", hdl->error);
-		ret = hdl->error;
-		goto free_ctrls;
-	}
-
-	v4l2_ctrl_new_custom(hdl, &ctrl_basler_csi_information, NULL);
-	if (hdl->error)
-	{
-		dev_err(&sensor->i2c_client->dev, "Register ctrl csi_information failed: %d\n", hdl->error);
-		ret = hdl->error;
-		goto free_ctrls;
+	if (unlikely(
+	    basler_camera_alloc_control(hdl, &ctrl_access_register, &sensor->i2c_client->dev) ||
+	    basler_camera_alloc_control(hdl, &ctrl_basler_device_information, &sensor->i2c_client->dev) ||
+	    basler_camera_alloc_control(hdl, &ctrl_basler_interface_version, &sensor->i2c_client->dev) ||
+	    basler_camera_alloc_control(hdl, &ctrl_basler_csi_information, &sensor->i2c_client->dev))) {
+		/* free up all controls allocated so far */
+		v4l2_ctrl_handler_free(hdl);
+		dev_dbg(sensor->sd.v4l2_dev->dev, "%s: ctrl setup error.\n",
+			__func__);
+		return hdl->error;
 	}
 
 	sensor->sd.ctrl_handler = hdl;
 	return 0;
-
-free_ctrls:
-	v4l2_ctrl_handler_free(hdl);
-	dev_dbg(sensor->sd.v4l2_dev->dev, "%s: ctrl handler error.\n", __func__);
-	return ret;
 }
 
 static int basler_camera_probe(struct i2c_client *client,
@@ -942,54 +1012,78 @@ static int basler_camera_probe(struct i2c_client *client,
 
 	dev_dbg(dev, " %s driver start probing\n", SENSOR_NAME);
 
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+	if (unlikely(!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))) {
 		dev_err(dev, "I2C_FUNC_I2C not supported\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto exit;
 	}
 
 	sensor = devm_kzalloc(dev, sizeof(*sensor), GFP_KERNEL);
-	if (!sensor)
-		return -ENOMEM;
+	if (unlikely(!sensor)) {
+		dev_dbg(dev, "Allocation failure basler_camera_dev\n");
+		ret = -ENOMEM;
+		goto exit;
+	}
 
 	sensor->i2c_client = client;
 
 	ret = of_property_read_u32(dev->of_node, "csi_id", &(sensor->csi));
 	if (ret) {
 		dev_err(dev, "csi id missing or invalid\n");
-		return ret;
+		goto exit;
 	}
 
 	v4l2_i2c_subdev_init(&sensor->sd, client, &basler_camera_subdev_ops);
 
-	ret = basler_retrieve_device_information(client, &sensor->device_information);
-	if (ret)
-		return ret;
+	ret = basler_retrieve_device_information(client,
+						 &sensor->device_information);
+	if (unlikely(ret)) {
+		dev_dbg(dev,
+			"basler_retrieve_device_information() failed: %d\n",
+			ret);
+		goto exit;
+	}
 
 	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
-	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	sensor->pad.flags = MEDIA_PAD_FL_SOURCE;
+	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 
 	sensor->sd.entity.ops = &basler_camera_sd_media_ops;
 	ret = media_entity_pads_init(&sensor->sd.entity, 1, &sensor->pad);
-	if (ret)
-		return ret;
+	if (unlikely(ret)) {
+		dev_dbg(dev, "media_entity_pads_init() failed: %d\n", ret);
+		goto exit;
+	}
 
 	mutex_init(&sensor->lock);
 
 	ret = basler_camera_init_controls(sensor);
-	if (ret)
+	if (unlikely(ret)) {
+		dev_dbg(dev,
+			"basler_camera_init_controls() failed: %d\n",
+			ret);
 		goto entity_cleanup;
+	}
 
 	ret = v4l2_async_register_subdev_sensor_common(&sensor->sd);
-	if (ret)
-		goto entity_cleanup;
+	if (unlikely(ret)) {
+		dev_dbg(dev,
+			"v4l2_async_register_subdev() failed: %d\n",
+			ret);
+		goto handler_cleanup;
+	}
 
 	dev_dbg(dev, " %s driver probed\n", SENSOR_NAME);
 	return 0;
 
+handler_cleanup:
+	sensor->sd.ctrl_handler = NULL;
+	v4l2_ctrl_handler_free(&sensor->ctrl_handler);
 entity_cleanup:
 	mutex_destroy(&sensor->lock);
 	media_entity_cleanup(&sensor->sd.entity);
+exit:
+	dev_dbg(dev, "%s failure: %d\n", __func__, ret);
 	return ret;
 }
 
@@ -1008,47 +1102,28 @@ static int basler_camera_remove(struct i2c_client *client)
 }
 
 static const struct i2c_device_id basler_camera_id[] = {
-	{ "basler-camera-vvcam", 0 },
-	{ },
+	{ STR_BASLER, 0 },
+	{},
 };
 MODULE_DEVICE_TABLE(i2c, basler_camera_id);
 
 static const struct of_device_id basler_camera_dt_ids[] = {
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-	{ .compatible = "basler,basler-camera-vvcam" },
-#else
-	{ .compatible = "basler,basler-camera" },
-#endif
+	{ .compatible = "basler," STR_BASLER },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, basler_camera_dt_ids);
 
-static struct
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-    i2c_driver basler_camera_i2c_driver_vvcam
-#else
-    i2c_driver basler_camera_i2c_driver
-#endif
-   = {
+static struct i2c_driver BASLER_DRIVER = {
 	.driver = {
-		.owner = THIS_MODULE,
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-		.name  = "basler-camera-vvcam",
-#else
-		.name  = "basler-camera",
-#endif
-		.of_match_table	= basler_camera_dt_ids,
+		.name = STR_BASLER,
+		.of_match_table = basler_camera_dt_ids,
 	},
 	.id_table = basler_camera_id,
-	.probe    = basler_camera_probe,
-	.remove   = basler_camera_remove,
+	.probe = basler_camera_probe,
+	.remove = basler_camera_remove,
 };
 
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-module_i2c_driver(basler_camera_i2c_driver_vvcam);
-#else
-module_i2c_driver(basler_camera_i2c_driver);
-#endif
+module_i2c_driver(BASLER_DRIVER);
 
 MODULE_DESCRIPTION("Basler camera subdev driver for vvcam");
 MODULE_AUTHOR("Sebastian Suesens <sebastian.suesens@baslerweb.com>");

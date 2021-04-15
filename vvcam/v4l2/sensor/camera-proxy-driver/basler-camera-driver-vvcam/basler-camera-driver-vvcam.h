@@ -28,27 +28,31 @@ extern "C" {
 /*
  * Basler interface Version
  */
-#define BASLER_INTERFACE_VERSION_MAJOR	((__u16) 1)
-#define BASLER_INTERFACE_VERSION_MINOR	((__u16) 0)
-
+#define BASLER_INTERFACE_VERSION_MAJOR ((__u16)1)
+#define BASLER_INTERFACE_VERSION_MINOR ((__u16)0)
 
 /*
-  Write register:
-         IOCTL VIDIOC_S_EXT_CTRLS  with command == I2CWRITE  + address, size and value
-
-  Read register:
-         IOCTL VIDIOC_S_EXT_CTRLS  with command == I2CREAD   + address and size
-    then IOCTL VIDIOC_G_EXT_CTRLS  returns value
-
-  For the maximum buffer size to use in a read or write command please consider the values
-  "Maximum Write Transfer Length"  and "Maximum Read Transfer Length" as described in the MCM Interface Specification.
-  These values can differ on the different sensor modules.
-*/
+ * Write register:
+ *   ioctl VIDIOC_S_EXT_CTRLS with command == I2CWRITE + address, size and value
+ *
+ * Read register:
+ *   ioctl VIDIOC_S_EXT_CTRLS with command == I2CREAD  + address and size
+ *   then ioctl VIDIOC_G_EXT_CTRLS returns value
+ *
+ * For the maximum buffer size to use in a read or write command please
+ * consider the values "Maximum Write Transfer Length" and "Maximum Read
+ * Transfer Length" as described in the MCM Interface Specification. These
+ * values can differ on the different sensor modules.
+ */
 struct register_access {
-	__u16 address;		/* Register address; host endianness*/
-	__u8 data[256];		/* Read/Write register value - target endianness  */
-	__u16 data_size;	/* Host endianness  */
-	__u8 command;		/* On a VIDIOC_S_EXT_CTRLS identifies to store the register address */
+	__u16 address;		/* Register address; host endianness */
+	__u8 data[256];		/* Read/Write register value,
+				 * in target endianness
+				 */
+	__u16 data_size;	/* Host endianness */
+	__u8 command;		/* On a VIDIOC_S_EXT_CTRLS identifies to store
+				 * the register address
+				 */
 };
 
 struct basler_device_information {
@@ -69,7 +73,9 @@ struct basler_device_information {
  *
  * @max_lanefrequency  Max theoretical CSI frequency per lane in hertz.
  * @lanecount          Available CSI lane count.
- * @laneassignment     describes the physical CSI-2 connection between host and camera module.
+ * @laneassignment     describes the physical CSI-2 connection between host and
+ *                     camera module.
+ *
  *                     The index starts with 0 as CSI lane 1 of the host.
  *                     The value starts with 1 as the CSI lane 1 of the sensor.
  */
@@ -86,7 +92,6 @@ enum {
 	BASLER_IOC_G_DEVICE_INFORMATION,
 	BASLER_IOC_G_CSI_INFORMATION
 };
-
 
 #ifdef ISP8000NANO_V1802
 #define CONFIG_BASLER_CAMERA_VVCAM
