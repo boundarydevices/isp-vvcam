@@ -52,6 +52,7 @@
  *****************************************************************************/
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
+#include <linux/version.h>
 #include <media/v4l2-event.h>
 
 #include "dwe_driver.h"
@@ -355,7 +356,9 @@ static struct v4l2_subdev_internal_ops dwe_internal_ops = {
 
 int dwe_hw_probe(struct platform_device *pdev)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	struct device *dev = &pdev->dev;
+#endif
 	struct dwe_device *dwe_dev;
 	struct resource *mem_res;
 	int irq;
@@ -398,6 +401,7 @@ int dwe_hw_probe(struct platform_device *pdev)
 		dwe_dev = pdwe_dev[dev_id];
 		dwe_dev->id = dev_id;
 		if (dev_id == 0){
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 			dwe_dev->clk_core = devm_clk_get(dev, "core");
 			if (IS_ERR(dwe_dev->clk_core)) {
 				rc = PTR_ERR(dwe_dev->clk_core);
@@ -418,6 +422,7 @@ int dwe_hw_probe(struct platform_device *pdev)
 				dev_err(dev, "can't get ahb clock: %d\n", rc);
 				return rc;
 			}
+#endif
 		}
 		dwe_dev->sd.internal_ops = &dwe_internal_ops;
 		v4l2_subdev_init(&dwe_dev->sd, &dwe_v4l2_subdev_ops);

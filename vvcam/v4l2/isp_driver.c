@@ -283,7 +283,9 @@ static struct v4l2_subdev_internal_ops isp_internal_ops = {
 
 int isp_hw_probe(struct platform_device *pdev)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	struct device *dev = &pdev->dev;
+#endif
 	struct isp_device *isp_dev;
 	struct resource *mem_res;
 	int irq;
@@ -304,6 +306,7 @@ int isp_hw_probe(struct platform_device *pdev)
 	}
 	isp_dev->ic_dev.id = isp_dev->id;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	isp_dev->clk_core = devm_clk_get(dev, "core");
 	if (IS_ERR(isp_dev->clk_core)) {
 		rc = PTR_ERR(isp_dev->clk_core);
@@ -324,6 +327,7 @@ int isp_hw_probe(struct platform_device *pdev)
 		dev_err(dev, "can't get ahb clock: %d\n", rc);
 		return rc;
 	}
+#endif
 
 	isp_dev->clk_sensor = devm_clk_get(dev, "sensor");
 	if (IS_ERR(isp_dev->clk_sensor)) {

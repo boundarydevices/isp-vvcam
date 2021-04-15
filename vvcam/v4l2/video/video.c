@@ -2171,7 +2171,7 @@ static int viv_video_probe(struct platform_device *pdev)
 			vdev->video->fops = &video_ops;
 			vdev->video->ioctl_ops = &video_ioctl_ops;
 			vdev->video->minor = -1;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
 			vdev->video->vfl_type = VFL_TYPE_VIDEO;
 #else
 			vdev->video->vfl_type = VFL_TYPE_GRABBER;
@@ -2205,7 +2205,7 @@ static int viv_video_probe(struct platform_device *pdev)
 			vdev->subdev_notifier.ops = &sd_async_notifier_ops;
 #endif
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
 			rc = video_register_device(vdev->video, VFL_TYPE_VIDEO, -1);
 #else
 			rc = video_register_device(vdev->video, VFL_TYPE_GRABBER, -1);
