@@ -1,2 +1,2 @@
-obj-m += samsung/
+#obj-m += samsung/
 
