@@ -22,6 +22,7 @@
 #include <media/v4l2-async.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
+#include <media/v4l2-event.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 #include "basler-camera-driver-vvcam.h"
@@ -690,6 +691,9 @@ static long basler_camera_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd, v
 static const struct v4l2_subdev_core_ops basler_camera_core_ops = {
 	.s_power = basler_camera_s_power,
 	.ioctl = basler_camera_priv_ioctl,
+	.log_status = v4l2_ctrl_subdev_log_status,
+	.subscribe_event = v4l2_ctrl_subdev_subscribe_event,
+	.unsubscribe_event = v4l2_event_subdev_unsubscribe,
 };
 
 static const struct v4l2_subdev_video_ops basler_camera_video_ops = {
@@ -1009,6 +1013,7 @@ static int basler_camera_probe(struct i2c_client *client,
 	if (ret)
 		return ret;
 
+	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_EVENTS;
 	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
 	sensor->pad.flags = MEDIA_PAD_FL_SOURCE;
