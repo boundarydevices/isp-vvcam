@@ -160,9 +160,7 @@ struct v4l2_subdev_ops isp_v4l2_subdev_ops = {
 
 int isp_hw_probe(struct platform_device *pdev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	struct device *dev = &pdev->dev;
-#endif
 	struct isp_device *isp_dev;
 	struct resource *mem_res;
 #ifdef ENABLE_IRQ
@@ -185,28 +183,26 @@ int isp_hw_probe(struct platform_device *pdev)
 	}
 	isp_dev->ic_dev.id = isp_dev->id;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-	isp_dev->clk_core = devm_clk_get(dev, "core");
+	isp_dev->clk_core = devm_clk_get_optional(dev, "core");
 	if (IS_ERR(isp_dev->clk_core)) {
 		rc = PTR_ERR(isp_dev->clk_core);
 		dev_err(dev, "can't get core clock: %d\n", rc);
 		return rc;
 	}
 
-	isp_dev->clk_axi = devm_clk_get(dev, "axi");
+	isp_dev->clk_axi = devm_clk_get_optional(dev, "axi");
 	if (IS_ERR(isp_dev->clk_axi)) {
 		rc = PTR_ERR(isp_dev->clk_axi);
 		dev_err(dev, "can't get axi clock: %d\n", rc);
 		return rc;
 	}
 
-	isp_dev->clk_ahb = devm_clk_get(dev, "ahb");
+	isp_dev->clk_ahb = devm_clk_get_optional(dev, "ahb");
 	if (IS_ERR(isp_dev->clk_ahb)) {
 		rc = PTR_ERR(isp_dev->clk_ahb);
 		dev_err(dev, "can't get ahb clock: %d\n", rc);
 		return rc;
 	}
-#endif
 
 	v4l2_subdev_init(&isp_dev->sd, &isp_v4l2_subdev_ops);
 	snprintf(isp_dev->sd.name, sizeof(isp_dev->sd.name), "vvcam-isp.%d", isp_dev->ic_dev.id);

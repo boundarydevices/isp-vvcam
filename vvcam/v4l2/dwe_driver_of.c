@@ -163,9 +163,7 @@ static struct v4l2_subdev_ops dwe_v4l2_subdev_ops = {
 
 int dwe_hw_probe(struct platform_device *pdev)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	struct device *dev = &pdev->dev;
-#endif
 	struct dwe_device *dwe_dev;
 	struct resource *mem_res;
 #ifdef ENABLE_IRQ
@@ -180,28 +178,26 @@ int dwe_hw_probe(struct platform_device *pdev)
 		goto end;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-	dwe_dev->clk_core = devm_clk_get(dev, "core");
+	dwe_dev->clk_core = devm_clk_get_optional(dev, "core");
 	if (IS_ERR(dwe_dev->clk_core)) {
 		rc = PTR_ERR(dwe_dev->clk_core);
 		dev_err(dev, "can't get core clock: %d\n", rc);
 		return rc;
 	}
 
-	dwe_dev->clk_axi = devm_clk_get(dev, "axi");
+	dwe_dev->clk_axi = devm_clk_get_optional(dev, "axi");
 	if (IS_ERR(dwe_dev->clk_axi)) {
 		rc = PTR_ERR(dwe_dev->clk_axi);
 		dev_err(dev, "can't get axi clock: %d\n", rc);
 		return rc;
 	}
 
-	dwe_dev->clk_ahb = devm_clk_get(dev, "ahb");
+	dwe_dev->clk_ahb = devm_clk_get_optional(dev, "ahb");
 	if (IS_ERR(dwe_dev->clk_ahb)) {
 		rc = PTR_ERR(dwe_dev->clk_ahb);
 		dev_err(dev, "can't get ahb clock: %d\n", rc);
 		return rc;
 	}
-#endif
 
 	v4l2_subdev_init(&dwe_dev->sd, &dwe_v4l2_subdev_ops);
 	snprintf(dwe_dev->sd.name, sizeof(dwe_dev->sd.name), DEVICE_NAME);
