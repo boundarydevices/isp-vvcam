@@ -2228,13 +2228,20 @@ static int viv_video_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct of_device_id viv_video_of_match[] = {
+	{ .compatible = "fsl,imx8mp-vvcam-video" },
+	{ /* sentinel */ },
+};
+MODULE_DEVICE_TABLE(of, viv_video_of_match);
+
 static struct platform_driver viv_video_driver = {
 	.probe = viv_video_probe,
 	.remove = viv_video_remove,
 	.driver = {
 		   .name = "vvcam-video",
 		   .owner = THIS_MODULE,
-		   },
+		   .of_match_table = viv_video_of_match,
+	},
 };
 
 static int __init viv_video_init_module(void)
