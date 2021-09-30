@@ -1451,7 +1451,6 @@ int os08a20_ioc_qcap(struct os08a20 *sensor, void *args)
 
 int os08a20_ioc_query_mode(struct os08a20 *sensor, struct vvcam_mode_info_array *array)
 {
-	array->count = ARRAY_SIZE(pos08a20_mode_info);
 #ifdef CONFIG_HARDENED_USERCOPY
 	unsigned long copy_ret = 0;
 	pr_debug("sensor %p\n", sensor);
@@ -1459,6 +1458,7 @@ int os08a20_ioc_query_mode(struct os08a20 *sensor, struct vvcam_mode_info_array 
 #else
 	memcpy(&array->modes,pos08a20_mode_info,sizeof(pos08a20_mode_info));
 #endif
+	array->count = ARRAY_SIZE(pos08a20_mode_info);
 	return 0;
 }
 

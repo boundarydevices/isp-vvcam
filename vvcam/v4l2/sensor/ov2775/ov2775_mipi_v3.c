@@ -1542,7 +1542,6 @@ int ov2775_ioc_qcap(struct ov2775 *sensor, void *args)
 
 int ov2775_ioc_query_mode(struct ov2775 *sensor, struct vvcam_mode_info_array *array)
 {
-	array->count = ARRAY_SIZE(pov2775_mode_info);
 #ifdef CONFIG_HARDENED_USERCOPY
 	unsigned long copy_ret = 0;
 	pr_debug("sensor %p\n", sensor);
@@ -1550,6 +1549,7 @@ int ov2775_ioc_query_mode(struct ov2775 *sensor, struct vvcam_mode_info_array *a
 #else
 	memcpy(&array->modes,pov2775_mode_info,sizeof(pov2775_mode_info));
 #endif
+	array->count = ARRAY_SIZE(pov2775_mode_info);
 
 	return 0;
 }
