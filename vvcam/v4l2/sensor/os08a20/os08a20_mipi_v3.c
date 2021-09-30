@@ -1453,8 +1453,9 @@ int os08a20_ioc_query_mode(struct os08a20 *sensor, struct vvcam_mode_info_array 
 {
 	array->count = ARRAY_SIZE(pos08a20_mode_info);
 #ifdef CONFIG_HARDENED_USERCOPY
+	unsigned long copy_ret = 0;
 	pr_debug("sensor %p\n", sensor);
-	copy_to_user(&array->modes,pos08a20_mode_info,sizeof(pos08a20_mode_info));
+	copy_ret = copy_to_user(&array->modes,pos08a20_mode_info,sizeof(pos08a20_mode_info));
 #else
 	memcpy(&array->modes,pos08a20_mode_info,sizeof(pos08a20_mode_info));
 #endif
