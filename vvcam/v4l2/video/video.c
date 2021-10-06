@@ -1719,16 +1719,6 @@ static struct v4l2_file_operations video_ops = {
 	.mmap = vidioc_mmap,
 };
 
-static void pdev_release(struct device *dev)
-{
-	pr_debug("enter %s\n", __func__);
-}
-
-static struct platform_device viv_pdev = {
-	.name = "vvcam-video",
-	.dev.release = pdev_release,
-};
-
 static int viv_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_event event;
@@ -2261,18 +2251,10 @@ static int __init viv_video_init_module(void)
 	int ret = 0;
 
 	pr_info("enter %s\n", __func__);
-	ret = platform_device_register(&viv_pdev);
-	if (ret) {
-		pr_err("register platform device failed.\n");
-		return ret;
-	}
-
 	ret = platform_driver_register(&viv_video_driver);
-	if (ret) {
+	if (ret)
 		pr_err("register platform driver failed.\n");
-		platform_device_unregister(&viv_pdev);
-		return ret;
-	}
+
 	return ret;
 }
 
@@ -2281,7 +2263,6 @@ static void __exit viv_video_exit_module(void)
 	pr_info("enter %s\n", __func__);
 	platform_driver_unregister(&viv_video_driver);
 	msleep(100);
-	platform_device_unregister(&viv_pdev);
 }
 
 module_init(viv_video_init_module);
