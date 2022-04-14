@@ -473,12 +473,6 @@ static int basler_retrieve_capture_properties(struct basler_camera_dev *sensor,
 		ret = 0;
 	}
 
-	if (ret || mpf == 0) {
-		dev_dbg(dev, "no limit for max-pixel-frequency\n");
-		/* reset possible read error */
-		ret = 0;
-	}
-
 	ret = fwnode_property_read_u64(of_fwnode_handle(ep),
 		"max-data-rate", &mdr);
 	if (ret || mdr == 0) {
