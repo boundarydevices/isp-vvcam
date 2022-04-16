@@ -12,6 +12,22 @@ extern "C" {
 
 #endif /* __KERNEL__ */
 
+/* We need to define a new V4L2_CTRL_TYPE value that does not collide
+ * with an existing one.
+ *
+ * The basic V4L2_CTRL_TYPE_XXX values are defined in linux/videodev2.h
+ * as enum v4l2_ctrl_type, but several other headers extend these
+ * definitions by adding more values through #defines. There seems to be
+ * no central coordination facility to avoid collisions when doing so.
+ * Therefore, the best we can do is selecting some obscure random value,
+ * cross our fingers and hope for the best.
+ */
+#ifdef BASLER_BUILD
+#define V4L2_CTRL_TYPE_UNIQUE	(0x370de8ca)
+#else
+#define V4L2_CTRL_TYPE_UNIQUE	(V4L2_CTRL_TYPE_U32 + 1)
+#endif
+
 #define V4L2_CID_PROXY_BASE			(V4L2_CTRL_CLASS_USER | 0x1000)
 #define V4L2_CID_BASLER_INTERFACE_VERSION	(V4L2_CID_PROXY_BASE+1)
 #define V4L2_CID_BASLER_ACCESS_REGISTER		(V4L2_CID_PROXY_BASE+2)
