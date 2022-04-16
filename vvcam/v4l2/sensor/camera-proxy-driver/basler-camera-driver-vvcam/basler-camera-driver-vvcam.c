@@ -33,12 +33,7 @@ static struct register_access ra_tmp;
 
 
 /* compact name as v4l2_capability->driver is limited to 16 characters */
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-#define SENSOR_NAME "basler-vvcam"
-#else
 #define SENSOR_NAME "basler-camera"
-#endif
-
 
 /*
  * ABRM register offsets
@@ -460,13 +455,11 @@ static int basler_retrieve_capture_properties(struct basler_camera_dev *sensor,
 
 	ret = fwnode_property_read_u64(of_fwnode_handle(ep),
 		"max-pixel-frequency", &mpf);
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
 	/* max-pixel-frequency is mandatory for vvcam */
 	if (ret) {
 		dev_err(dev, "failed to parse endpoint: max-pixel-frequency missing\n");
 		return ret;
 	}
-#endif
 
 	if (ret || mpf == 0) {
 		dev_dbg(dev, "no limit for max-pixel-frequency\n");
@@ -1060,35 +1053,23 @@ static int basler_camera_remove(struct i2c_client *client)
 }
 
 static const struct i2c_device_id basler_camera_id[] = {
+	{ "basler-camera", 0 },
 	{ "basler-camera-vvcam", 0 },
 	{ },
 };
 MODULE_DEVICE_TABLE(i2c, basler_camera_id);
 
 static const struct of_device_id basler_camera_dt_ids[] = {
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-	{ .compatible = "basler,basler-camera-vvcam" },
-#else
 	{ .compatible = "basler,basler-camera" },
-#endif
+	{ .compatible = "basler,basler-camera-vvcam" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, basler_camera_dt_ids);
 
 static struct
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-    i2c_driver basler_camera_i2c_driver_vvcam
-#else
-    i2c_driver basler_camera_i2c_driver
-#endif
-   = {
+    i2c_driver basler_camera_i2c_driver = {
 	.driver = {
-		.owner = THIS_MODULE,
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-		.name  = "basler-camera-vvcam",
-#else
 		.name  = "basler-camera",
-#endif
 		.of_match_table	= basler_camera_dt_ids,
 	},
 	.id_table = basler_camera_id,
@@ -1096,12 +1077,8 @@ static struct
 	.remove   = basler_camera_remove,
 };
 
-#ifdef CONFIG_BASLER_CAMERA_VVCAM
-module_i2c_driver(basler_camera_i2c_driver_vvcam);
-#else
 module_i2c_driver(basler_camera_i2c_driver);
-#endif
 
-MODULE_DESCRIPTION("Basler camera subdev driver for vvcam");
+MODULE_DESCRIPTION("Basler camera subdev driver");
 MODULE_AUTHOR("Sebastian Suesens <sebastian.suesens@baslerweb.com>");
 MODULE_LICENSE("GPL");

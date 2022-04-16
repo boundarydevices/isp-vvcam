@@ -104,11 +104,6 @@ enum {
 
 };
 
-
-#ifdef ISP8000NANO_V1802
-#define CONFIG_BASLER_CAMERA_VVCAM
-#endif
-
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
