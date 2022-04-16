@@ -66,15 +66,8 @@ static struct register_access ra_tmp;
  */
 #define I2C_MAXIMUM_READ_BURST	8
 
-
-
-static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address);
-
 static int basler_camera_s_ctrl(struct v4l2_ctrl *ctrl);
 static int basler_camera_g_volatile_ctrl(struct v4l2_ctrl *ctrl);
-static int basler_camera_validate(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr);
-static void basler_camera_init(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr);
-static bool basler_camera_equal(const struct v4l2_ctrl *ctrl, u32 idx, union v4l2_ctrl_ptr ptr1, union v4l2_ctrl_ptr ptr2);
 
 struct basler_camera_dev {
 	struct i2c_client *i2c_client;
@@ -92,6 +85,35 @@ struct basler_camera_dev {
 
 	int csi;
 };
+
+static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address)
+{
+	struct i2c_msg msgs[2] = {};
+	int ret = 0;
+
+	msgs[0].addr = client->addr;
+	msgs[0].flags = 0;
+	msgs[0].buf = (__u8 *)&register_address;
+	msgs[0].len = sizeof(register_address);
+
+	msgs[1].addr = client->addr;
+	msgs[1].flags = I2C_M_RD;
+	msgs[1].buf = buffer;
+	msgs[1].len = buffer_size;
+
+	ret = i2c_transfer(client->adapter, msgs, 2);
+	if (ret < 0) {
+		pr_err("i2c_transfer() failed: %d\n", ret);
+		return ret;
+	}
+
+	if (ret != 2) {
+		pr_err("i2c_transfer() incomplete");
+		return -EIO;
+	}
+
+	return msgs[1].len;
+}
 
 /**
  * basler_write_burst - issue a burst I2C message in master transmit mode
@@ -156,36 +178,6 @@ static int basler_read_burst(struct i2c_client *client,
 		ra_p->data_size = ret;
 
 	return ret;
-}
-
-
-static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address)
-{
-	struct i2c_msg msgs[2] = {};
-	int ret = 0;
-
-	msgs[0].addr = client->addr;
-	msgs[0].flags = 0;
-	msgs[0].buf = (__u8 *)&register_address;
-	msgs[0].len = sizeof(register_address);
-
-	msgs[1].addr = client->addr;
-	msgs[1].flags = I2C_M_RD;
-	msgs[1].buf = buffer;
-	msgs[1].len = buffer_size;
-
-	ret = i2c_transfer(client->adapter, msgs, 2);
-	if (ret < 0) {
-		pr_err("i2c_transfer() failed: %d\n", ret);
-		return ret;
-	}
-
-	if (ret != 2) {
-		pr_err("i2c_transfer() incomplete");
-		return -EIO;
-	}
-
-	return msgs[1].len;
 }
 
 static int basler_read_register(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address)
@@ -708,12 +700,6 @@ static const struct v4l2_ctrl_ops basler_camera_ctrl_ops = {
 	.s_ctrl = basler_camera_s_ctrl,
 };
 
-static const struct v4l2_ctrl_type_ops basler_camera_ctrl_type_ops = {
-	.validate = basler_camera_validate,
-	.init = basler_camera_init,
-	.equal = basler_camera_equal,
-};
-
 /**
  * basler_camera_validate
  *
@@ -747,6 +733,12 @@ static bool basler_camera_equal(const struct v4l2_ctrl *ctrl, u32 idx, union v4l
 {
 	return 0;
 }
+
+static const struct v4l2_ctrl_type_ops basler_camera_ctrl_type_ops = {
+	.validate = basler_camera_validate,
+	.init = basler_camera_init,
+	.equal = basler_camera_equal,
+};
 
 static const struct v4l2_ctrl_config ctrl_access_register = {
 	.ops = &basler_camera_ctrl_ops,
