@@ -20,6 +20,9 @@ ENABLE_IRQ := yes
 ifeq ($(ENABLE_IRQ), yes)
   EXTRA_CFLAGS += -DENABLE_IRQ
 endif
+ifeq ($(BASLER_BUILD), yes)
+  EXTRA_CFLAGS += -DBASLER_BUILD
+endif
 
 ifeq ($(ANDROID), no)
 EXTRA_CFLAGS += -O2 -Werror
@@ -79,6 +82,8 @@ ifeq ($(BUILD_FOR_GKI), yes)
 build_target += modules_install
 ARCH_TYPE := arm64
 endif
+
+export BASLER_BUILD
 
 all:
 	@$(MAKE) V=$(V) -C $(KERNEL_SRC) ARCH=$(ARCH_TYPE) M=$(PWD) ENABLE_IRQ=$(ENABLE_IRQ) $(build_target)

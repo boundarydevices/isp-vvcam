@@ -15,6 +15,9 @@ ENABLE_IRQ := yes
 ifeq ($(ENABLE_IRQ), yes)
   EXTRA_CFLAGS += -DENABLE_IRQ
 endif
+ifeq ($(BASLER_BUILD), yes)
+  EXTRA_CFLAGS += -DBASLER_BUILD
+endif
 
 EXTRA_CFLAGS += -O2 -Werror
 
@@ -63,6 +66,8 @@ obj-m += vvcam-dwe.o
 
 #obj-m += csi/
 obj-m += sensor/
+
+export BASLER_BUILD
 
 all:
 	make -C $(KERNEL_SRC) M=$(SRC) ENABLE_IRQ=$(ENABLE_IRQ)
