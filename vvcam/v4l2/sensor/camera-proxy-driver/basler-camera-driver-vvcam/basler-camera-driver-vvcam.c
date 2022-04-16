@@ -86,6 +86,21 @@ struct basler_camera_dev {
 	int csi;
 };
 
+static int basler_write_register_chunk(struct i2c_client *client, u8 *buffer,
+				       u16 buffer_size)
+{
+	int ret;
+
+	ret = i2c_master_send(client, buffer, buffer_size);
+	if (ret < 0)
+		return ret;
+
+	if (ret != buffer_size)
+		return -EIO;
+
+	return ret;
+}
+
 static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, __u8 buffer_size, __u16 register_address)
 {
 	struct i2c_msg msgs[2] = {};
@@ -144,10 +159,12 @@ static int basler_write_burst(struct basler_camera_dev *sensor,
 		return ra_p->data_size;
 	}
 	else if(I2CWRITE == (ra_p->command | I2CWRITE)){
-		ret = i2c_master_send(client, (char *)ra_p, ra_p->data_size + sizeof(ra_p->address));
+		ret = basler_write_register_chunk(client, (char *)ra_p,
+				ra_p->data_size + sizeof(ra_p->address));
+		if (ret < 0)
+			return ret;
 
-		if(ret)
-			ra_p->data_size = ret;
+		ra_p->data_size = ret;
 
 		old_address = ra_p->address;
 		return ret;
@@ -673,13 +690,11 @@ static long basler_camera_priv_ioctl(struct v4l2_subdev *sd, unsigned int cmd, v
 		memcpy (&ra, ra_p, sizeof(ra));
 		ra.address = cpu_to_be16(ra_p->address);
 
-		ret = i2c_master_send(client, (char *)&ra, ra.data_size + sizeof(ra.address));
-		if(ret) {
-			ra_p->data_size = ret;
-			ret = 0;
-		}
-		else
-			ret = -EIO;
+		ret = basler_write_register_chunk(client, (char *)&ra, ra.data_size + sizeof(ra.address));
+		if (ret < 0)
+			return ret;
+
+		return 0;
 	}
 	break;
 
