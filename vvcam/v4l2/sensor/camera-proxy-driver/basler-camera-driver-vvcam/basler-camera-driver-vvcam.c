@@ -74,6 +74,7 @@ struct basler_camera_dev {
 	struct v4l2_device  *v4l2_dev;
 	struct v4l2_subdev sd;
 	struct media_pad pad;
+	struct v4l2_mbus_framefmt format;
 
 	/* lock to protect all members below */
 	struct mutex lock;
@@ -504,6 +505,46 @@ static int basler_camera_set_fmt(struct v4l2_subdev *sd,
 				 struct v4l2_subdev_format *format)
 #endif
 {
+	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
+
+	if (format->pad)
+		return -EINVAL;
+
+	mutex_lock(&sensor->lock);
+
+	sensor->format = format->format;
+
+	mutex_unlock(&sensor->lock);
+
+	return 0;
+}
+
+/**
+ * basler_camera_get_fmt - Get current format
+ *
+ * Returns always zero
+ */
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 12, 0)
+static int basler_camera_get_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_state *sd_state,
+			  struct v4l2_subdev_format *format)
+#else
+static int basler_camera_get_fmt(struct v4l2_subdev *sd,
+			  struct v4l2_subdev_pad_config *cfg,
+			  struct v4l2_subdev_format *format)
+#endif
+{
+	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
+
+	if (format->pad)
+		return -EINVAL;
+
+	mutex_lock(&sensor->lock);
+
+	format->format = sensor->format;
+
+	mutex_unlock(&sensor->lock);
+
 	return 0;
 }
 
@@ -687,6 +728,7 @@ static const struct v4l2_subdev_video_ops basler_camera_video_ops = {
 
 static const struct v4l2_subdev_pad_ops basler_camera_pad_ops = {
 	.set_fmt = basler_camera_set_fmt,
+	.get_fmt = basler_camera_get_fmt,
 };
 
 static const struct v4l2_subdev_ops basler_camera_subdev_ops = {
