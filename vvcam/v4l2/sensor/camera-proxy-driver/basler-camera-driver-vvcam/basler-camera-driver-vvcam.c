@@ -28,10 +28,6 @@
 #include "basler-camera-driver-vvcam.h"
 #include "vvsensor.h"
 
-/*global variable*/
-static struct register_access ra_tmp;
-
-
 /* compact name as v4l2_capability->driver is limited to 16 characters */
 #define SENSOR_NAME "basler-camera"
 
@@ -84,6 +80,9 @@ struct basler_camera_dev {
 
 	struct basler_device_information device_information;
 
+	/* Storage for register address and data size for register reads */
+	struct register_access ra_tmp;
+
 	int csi;
 };
 
@@ -123,9 +122,10 @@ static int basler_read_register_chunk(struct i2c_client* client, __u8* buffer, _
  *
  * Returns negative errno, or else the number of bytes written.
  */
-static int basler_write_burst(struct i2c_client *client,
+static int basler_write_burst(struct basler_camera_dev *sensor,
 			      struct register_access *ra_p)
 {
+	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 	__u16 old_address;
 
@@ -138,8 +138,8 @@ static int basler_write_burst(struct i2c_client *client,
 	ra_p->address = cpu_to_be16(ra_p->address);
 
 	if (I2CREAD == (ra_p->command | I2CREAD)){
-		ra_tmp.address = ra_p->address;
-		ra_tmp.data_size = ra_p->data_size;
+		sensor->ra_tmp.address = ra_p->address;
+		sensor->ra_tmp.data_size = ra_p->data_size;
 		old_address = ra_p->address;
 		return ra_p->data_size;
 	}
@@ -166,13 +166,14 @@ static int basler_write_burst(struct i2c_client *client,
  *
  * Returns negative errno, or else the number of bytes written.
  */
-static int basler_read_burst(struct i2c_client *client,
-		struct register_access *ra_p)
+static int basler_read_burst(struct basler_camera_dev *sensor,
+			     struct register_access *ra_p)
 {
+	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 
-	ret = basler_read_register_chunk(client, ra_p->data, ra_tmp.data_size,
-									ra_tmp.address);
+	ret = basler_read_register_chunk(client, ra_p->data,
+			sensor->ra_tmp.data_size, sensor->ra_tmp.address);
 	if (ret < 0)
 		ra_p->data_size = 0;
 	else
@@ -835,7 +836,6 @@ static int basler_camera_s_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
 	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
-	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 	struct register_access *fp_ra_new;
 
@@ -846,26 +846,23 @@ static int basler_camera_s_ctrl(struct v4l2_ctrl *ctrl)
 			return -ENOMEM;
 
 		fp_ra_new = (struct register_access*) ctrl->p_new.p;
-		if(basler_write_burst(client, fp_ra_new))
-			ret = 0;
-		else
-			ret = -EIO;
+		ret = basler_write_burst(sensor, fp_ra_new);
+		if (ret < 0)
+			return -EIO;
 
 		break;
 
 	default:
-		ret = -EINVAL;
-		break;
+		return -EINVAL;
 	}
 
-	return ret;
+	return 0;
 }
 
 static int basler_camera_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct v4l2_subdev *sd = ctrl_to_sd(ctrl);
 	struct basler_camera_dev *sensor = to_basler_camera_dev(sd);
-	struct i2c_client *client = sensor->i2c_client;
 	int ret;
 	struct register_access *fp_ra_new = NULL;
 	struct basler_device_information* l_bdi = NULL;
@@ -877,10 +874,14 @@ static int basler_camera_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 
 		if (ctrl->elem_size == sizeof(struct register_access))
 		{
-			if(basler_read_burst(client, fp_ra_new))
-				ret = 0;
-			else
-				ret = -EIO;
+			ret = basler_read_burst(sensor, fp_ra_new);
+			if (ret < 0)
+				return ret;
+
+			if (ret == 0)
+				return -EIO;
+
+			return 0;
 		}
 		else {
 			ret = -ENOMEM;
