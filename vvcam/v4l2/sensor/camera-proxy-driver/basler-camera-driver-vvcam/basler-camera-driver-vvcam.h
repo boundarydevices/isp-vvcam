@@ -37,6 +37,27 @@ extern "C" {
 #define I2CREAD		(1)
 #define I2CWRITE	(2)
 
+#ifdef BASLER_BUILD
+/* ioctl based interface */
+#define __BASLER_CAMERA_IOC		0x42
+
+#define BASLER_IOC_G_INTERFACE_VERSION	_IOR(__BASLER_CAMERA_IOC, 1, __u32)
+#define BASLER_IOC_G_DEVICE_INFORMATION	_IOR(__BASLER_CAMERA_IOC, 2, struct basler_device_information)
+#define BASLER_IOC_G_CSI_INFORMATION	_IOR(__BASLER_CAMERA_IOC, 3, struct basler_csi_information)
+#define BASLER_IOC_READ_REGISTER	_IOWR(__BASLER_CAMERA_IOC, 4, struct register_access)
+#define BASLER_IOC_WRITE_REGISTER	_IOWR(__BASLER_CAMERA_IOC, 5, struct register_access)
+#define BASLER_IOC_G_CAPTURE_PROPERTIES	_IOR(__BASLER_CAMERA_IOC, 6, struct basler_capture_properties)
+#else
+enum {
+	BASLER_IOC_G_INTERFACE_VERSION = 0x100,
+	BASLER_IOC_READ_REGISTER,
+	BASLER_IOC_WRITE_REGISTER,
+	BASLER_IOC_G_DEVICE_INFORMATION,
+	BASLER_IOC_G_CSI_INFORMATION,
+	BASLER_IOC_G_CAPTURE_PROPERTIES
+};
+#endif
+
 #define GENCP_STRING_BUFFER_SIZE	(64)
 #define STRING_TERMINATION		(1)
 #define BDI_MAGIC			(84513200)
@@ -108,16 +129,6 @@ struct basler_capture_properties {
 	__u64 max_lane_frequency;
 	__u64 max_pixel_frequency;
 	__u64 max_data_rate;
-};
-
-enum {
-	BASLER_IOC_G_INTERFACE_VERSION = 0x100,
-	BASLER_IOC_READ_REGISTER,
-	BASLER_IOC_WRITE_REGISTER,
-	BASLER_IOC_G_DEVICE_INFORMATION,
-	BASLER_IOC_G_CSI_INFORMATION,
-	BASLER_IOC_G_CAPTURE_PROPERTIES
-
 };
 
 #ifdef __cplusplus
