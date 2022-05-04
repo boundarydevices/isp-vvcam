@@ -137,12 +137,25 @@ struct viv_caps_size_s {
 	uint32_t height;
 };
 
+struct viv_caps_size_s_old {
+	uint32_t width;
+	uint32_t height;
+};
+
 struct vvcam_constant_modeinfo {
 	uint32_t index;
 	struct viv_caps_size_s size;
 	uint32_t fps;
 	uint32_t hdr_mode;
 	uint32_t stitching_mode;
+	uint32_t bayer_pattern;
+	uint32_t bit_width;
+};
+
+struct vvcam_constant_modeinfo_old {
+	uint32_t index;
+	struct viv_caps_size_s_old size;
+	uint32_t fps;
 	uint32_t bayer_pattern;
 	uint32_t bit_width;
 };
@@ -201,6 +214,7 @@ struct viv_caps_supports{
 #define VIV_VIDIOC_QUERY_EXTMEM         _IOWR('V', BASE_VIDIOC_PRIVATE + 6, struct ext_buf_info)
 #define VIV_VIDIOC_S_ENDPOINT           _IOW('V',  BASE_VIDIOC_PRIVATE + 7, int)
 #define VIV_VIDIOC_S_MODEINFO           _IOW('V',  BASE_VIDIOC_PRIVATE + 8, struct vvcam_constant_modeinfo)
+#define VIV_VIDIOC_S_MODEINFO_OLD       _IOW('V',  BASE_VIDIOC_PRIVATE + 8, struct vvcam_constant_modeinfo_old)
 #define VIV_VIDIOC_S_CAPS_MODE          _IOW('V',  BASE_VIDIOC_PRIVATE + 9, struct viv_caps_mode_s)
 #define VIV_VIDIOC_G_CAPS_MODE          _IOWR('V', BASE_VIDIOC_PRIVATE + 10, struct viv_caps_mode_s)
 #define VIV_VIDIOC_EVENT_RESULT         _IOWR('V', BASE_VIDIOC_PRIVATE + 11, int)

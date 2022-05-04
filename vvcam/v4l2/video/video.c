@@ -1004,6 +1004,20 @@ static long private_ioctl(struct file *file, void *fh,
 		rc = viv_set_modeinfo(handle, arg);
 		break;
 
+	case VIV_VIDIOC_S_MODEINFO_OLD: {
+		struct vvcam_constant_modeinfo camera_mode;
+		struct vvcam_constant_modeinfo_old *cm = arg;
+
+		memset(&camera_mode, 0, sizeof(camera_mode));
+		camera_mode.index = cm->index;
+		camera_mode.size.width = cm->size.width;
+		camera_mode.size.height = cm->size.height;
+		camera_mode.fps = cm->fps;
+		camera_mode.bayer_pattern = cm->bayer_pattern;
+		camera_mode.bit_width = cm->bit_width;
+		rc = viv_set_modeinfo(handle, &camera_mode);
+		break;
+	}
 	case VIV_VIDIOC_S_CAPS_MODE:
 		memcpy(&(dev->caps_mode), arg, sizeof(dev->caps_mode));
 		rc = set_caps_mode_event(file);
