@@ -31,6 +31,7 @@
 
 /* compact name as v4l2_capability->driver is limited to 16 characters */
 #define SENSOR_NAME "basler-camera"
+#define SENSOR_NAME_VVCAM "basler-vvcam"
 
 /*
  * ABRM register offsets
@@ -77,6 +78,7 @@ struct basler_camera_dev {
 
 	int power_count;
 	struct v4l2_ctrl_handler ctrl_handler;
+	char cam_name[32];
 
 	struct basler_device_information device_information;
 
@@ -626,7 +628,8 @@ static int basler_camera_s_power(struct v4l2_subdev *sd, int on)
 static int basler_ioc_qcap(struct basler_camera_dev *sensor, void *args)
 {
 	struct v4l2_capability *cap = (struct v4l2_capability *)args;
-	strcpy((char *)cap->driver, SENSOR_NAME);
+
+	strncpy((char *)cap->driver, sensor->cam_name, sizeof(cap->driver));
 
 	sprintf((char *)cap->bus_info, "csi%d",sensor->csi); //bus_info[0:7]-csi number
 	if(sensor->i2c_client->adapter)
@@ -1118,6 +1121,10 @@ static int basler_camera_probe(struct i2c_client *client,
 		goto exit;
 	}
 
+	if (strstr(sensor->device_information.modelName, "4200"))
+		strncpy(sensor->cam_name, SENSOR_NAME, sizeof(sensor->cam_name));
+	else
+		strncpy(sensor->cam_name, SENSOR_NAME_VVCAM, sizeof(sensor->cam_name));
 	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_EVENTS;
 	sensor->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	sensor->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
@@ -1151,8 +1158,8 @@ static int basler_camera_probe(struct i2c_client *client,
 		goto handler_cleanup;
 	}
 
-	dev_dbg(dev, " %s driver probed\n", SENSOR_NAME);
-	dev_info(dev, "Basler Camera Driver v1.5.3 loaded successfully\n");
+	dev_info(dev, "Basler Camera Driver v1.5.3 loaded successfully (%s)\n",
+		 sensor->cam_name);
 	return 0;
 
 handler_cleanup:
