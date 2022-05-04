@@ -205,25 +205,31 @@ struct viv_caps_supports{
 
 #define VIV_VIDEO_EVENT_TIMOUT_MS	5000
 
-#define VIV_VIDIOC_EVENT_COMPLETE       _IOW('V',  BASE_VIDIOC_PRIVATE + 0, struct viv_video_event)
-#define VIV_VIDIOC_BUFFER_ALLOC         _IOWR('V', BASE_VIDIOC_PRIVATE + 1, struct ext_buf_info)
-#define VIV_VIDIOC_BUFFER_FREE          _IOWR('V', BASE_VIDIOC_PRIVATE + 2, struct ext_buf_info)
-#define VIV_VIDIOC_CONTROL_EVENT        _IOWR('V', BASE_VIDIOC_PRIVATE + 3, struct viv_control_event)
-#define VIV_VIDIOC_S_STREAMID           _IOW('V',  BASE_VIDIOC_PRIVATE + 4, int)
-#define VIV_VIDIOC_BUFDONE              _IOW('V',  BASE_VIDIOC_PRIVATE + 5, struct v4l2_user_buffer)
-#define VIV_VIDIOC_QUERY_EXTMEM         _IOWR('V', BASE_VIDIOC_PRIVATE + 6, struct ext_buf_info)
-#define VIV_VIDIOC_S_ENDPOINT           _IOW('V',  BASE_VIDIOC_PRIVATE + 7, int)
-#define VIV_VIDIOC_S_MODEINFO           _IOW('V',  BASE_VIDIOC_PRIVATE + 8, struct vvcam_constant_modeinfo)
-#define VIV_VIDIOC_S_MODEINFO_OLD       _IOW('V',  BASE_VIDIOC_PRIVATE + 8, struct vvcam_constant_modeinfo_old)
-#define VIV_VIDIOC_S_CAPS_MODE          _IOW('V',  BASE_VIDIOC_PRIVATE + 9, struct viv_caps_mode_s)
-#define VIV_VIDIOC_G_CAPS_MODE          _IOWR('V', BASE_VIDIOC_PRIVATE + 10, struct viv_caps_mode_s)
-#define VIV_VIDIOC_EVENT_RESULT         _IOWR('V', BASE_VIDIOC_PRIVATE + 11, int)
-#define VIV_VIDIOC_GET_CAPS_SUPPORTS    _IOWR('V', BASE_VIDIOC_PRIVATE + 12, struct viv_caps_supports)
-#define VIV_VIDIOC_SET_CAPS_SUPPORTS    _IOWR('V', BASE_VIDIOC_PRIVATE + 13, struct viv_caps_supports)
-#define VIV_VIDIOC_S_DWECFG             _IOW('V',  BASE_VIDIOC_PRIVATE + 14, int)
-#define VIV_VIDIOC_G_DWECFG             _IOR('V',  BASE_VIDIOC_PRIVATE + 15, int)
-#define VIV_VIDIOC_S_DUMPBUF_STATUS     _IOW('V',  BASE_VIDIOC_PRIVATE + 16, int)
-#define VIV_VIDIOC_G_DUMPBUF_STATUS     _IOR('V',  BASE_VIDIOC_PRIVATE + 17, int)
-#define VIV_VIDIOC_DUMPBUF              _IOWR('V',  BASE_VIDIOC_PRIVATE + 18, struct viv_caps_dump_buf_s)
+#ifdef OLD_VIV_VIDIOC_BASE
+#define BASE (BASE_VIDIOC_PRIVATE + 100)
+#else
+#define BASE BASE_VIDIOC_PRIVATE
+#endif
+
+#define VIV_VIDIOC_EVENT_COMPLETE       _IOW('V',  BASE + 0, struct viv_video_event)
+#define VIV_VIDIOC_BUFFER_ALLOC         _IOWR('V', BASE + 1, struct ext_buf_info)
+#define VIV_VIDIOC_BUFFER_FREE          _IOWR('V', BASE + 2, struct ext_buf_info)
+#define VIV_VIDIOC_CONTROL_EVENT        _IOWR('V', BASE + 3, struct viv_control_event)
+#define VIV_VIDIOC_S_STREAMID           _IOW('V',  BASE + 4, int)
+#define VIV_VIDIOC_BUFDONE              _IOW('V',  BASE + 5, struct v4l2_user_buffer)
+#define VIV_VIDIOC_QUERY_EXTMEM         _IOWR('V', BASE + 6, struct ext_buf_info)
+#define VIV_VIDIOC_S_ENDPOINT           _IOW('V',  BASE + 7, int)
+#define VIV_VIDIOC_S_MODEINFO           _IOW('V',  BASE + 8, struct vvcam_constant_modeinfo)
+#define VIV_VIDIOC_S_MODEINFO_OLD       _IOW('V',  BASE + 8, struct vvcam_constant_modeinfo_old)
+#define VIV_VIDIOC_S_CAPS_MODE          _IOW('V',  BASE + 9, struct viv_caps_mode_s)
+#define VIV_VIDIOC_G_CAPS_MODE          _IOWR('V', BASE + 10, struct viv_caps_mode_s)
+#define VIV_VIDIOC_EVENT_RESULT         _IOWR('V', BASE + 11, int)
+#define VIV_VIDIOC_GET_CAPS_SUPPORTS    _IOWR('V', BASE + 12, struct viv_caps_supports)
+#define VIV_VIDIOC_SET_CAPS_SUPPORTS    _IOWR('V', BASE + 13, struct viv_caps_supports)
+#define VIV_VIDIOC_S_DWECFG             _IOW('V',  BASE + 14, int)
+#define VIV_VIDIOC_G_DWECFG             _IOR('V',  BASE + 15, int)
+#define VIV_VIDIOC_S_DUMPBUF_STATUS     _IOW('V',  BASE + 16, int)
+#define VIV_VIDIOC_G_DUMPBUF_STATUS     _IOR('V',  BASE + 17, int)
+#define VIV_VIDIOC_DUMPBUF              _IOWR('V',  BASE + 18, struct viv_caps_dump_buf_s)
 
 #endif

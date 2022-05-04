@@ -68,6 +68,7 @@ obj-m += vvcam-dwe.o
 obj-m += sensor/
 
 export BASLER_BUILD
+export OLD_VIV_VIDIOC_BASE
 
 all:
 	make -C $(KERNEL_SRC) M=$(SRC) ENABLE_IRQ=$(ENABLE_IRQ)
