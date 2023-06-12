@@ -1085,7 +1085,7 @@ static int imx219_set_fmt(struct v4l2_subdev *sd,
 	const struct imx219_mode_crop *pmode_crop;
 	//struct v4l2_mbus_framefmt *framefmt;
 	//int exposure_max, exposure_def, hblank;
-	unsigned int i;
+	unsigned int i = 0;
 	pr_info("enter %s ===\n", __func__);
 
 	mutex_lock(&sensor->mutex);
