@@ -397,12 +397,14 @@ struct isp_ee_context {
 
 struct isp_exp_context {
 	bool enable;
+	bool changed;
 	u32 mode;
 	struct ic_window window;
 };
 
 struct isp_hist_context {
 	bool enable;
+	bool changed;
 	u32 mode;
 	u32 step_size;
 	struct ic_window window;

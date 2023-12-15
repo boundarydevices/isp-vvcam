@@ -428,6 +428,14 @@ irqreturn_t isp_hw_isr(int irq, void *data)
 			isp_enable_gamma_out(dev, dev->gamma_out.enableGamma);
 		}
 
+		if (dev->exp.changed) {
+			isp_s_exp(dev);
+		}
+
+		if (dev->hist.changed) {
+			isp_s_hist(dev);
+		}
+
 		spin_unlock_irqrestore(&dev->irqlock, flags);
 	}
 

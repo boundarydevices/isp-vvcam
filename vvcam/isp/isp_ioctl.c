@@ -1074,14 +1074,19 @@ int isp_s_exp(struct isp_ic_dev *dev)
 	struct isp_exp_context *exp = &dev->exp;
 	u32 isp_exp_ctrl = isp_read_reg(dev, REG_ADDR(isp_exp_ctrl));
 	u32 isp_imsc = isp_read_reg(dev, REG_ADDR(isp_imsc));
+	u32 isp_ctrl = isp_read_reg(dev, REG_ADDR(isp_ctrl));
 
 	isp_info("enter %s\n", __func__);
+
+	dev->exp.changed = false;
 
 	if (!exp->enable) {
 		REG_SET_SLICE(isp_exp_ctrl, MRV_AE_EXP_START, 0);
 		isp_write_reg(dev, REG_ADDR(isp_exp_ctrl), isp_exp_ctrl);
 		isp_write_reg(dev, REG_ADDR(isp_imsc),
 				  isp_imsc & ~MRV_ISP_IMSC_EXP_END_MASK);
+		REG_SET_SLICE(isp_ctrl, MRV_ISP_ISP_GEN_CFG_UPD, 1);
+		isp_write_reg(dev, REG_ADDR(isp_ctrl), isp_ctrl);
 		return 0;
 	}
 
@@ -1108,8 +1113,26 @@ int isp_s_exp(struct isp_ic_dev *dev)
 	isp_write_reg(dev, REG_ADDR(isp_exp_ctrl), isp_exp_ctrl);
 	isp_write_reg(dev, REG_ADDR(isp_imsc),
 			  isp_imsc | MRV_ISP_IMSC_EXP_END_MASK);
-
+	REG_SET_SLICE(isp_ctrl, MRV_ISP_ISP_GEN_CFG_UPD, 1);
+	isp_write_reg(dev, REG_ADDR(isp_ctrl), isp_ctrl);
 	return 0;
+}
+
+int isp_exp_control(struct isp_ic_dev *dev)
+{
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&dev->irqlock, flags);
+	if (!is_isp_enable(dev)) {
+		ret = isp_s_exp(dev);
+	} else {
+		dev->exp.changed = true;
+	}
+
+	spin_unlock_irqrestore(&dev->irqlock, flags);
+
+	return ret;
 }
 
 int isp_g_expmean(struct isp_ic_dev *dev, u8 *mean)
@@ -1134,6 +1157,7 @@ int isp_g_expmean(struct isp_ic_dev *dev, u8 *mean)
 int isp_s_hist(struct isp_ic_dev *dev)
 {
 	struct isp_hist_context *hist = &dev->hist;
+	u32 isp_ctrl = isp_read_reg(dev, REG_ADDR(isp_ctrl));
 
 #ifdef ISP_HIST256
 	u32 isp_hist256_prop = isp_read_reg(dev, REG_ADDR(isp_hist256_prop));
@@ -1181,11 +1205,15 @@ int isp_s_hist(struct isp_ic_dev *dev)
 	int i;
 
 	isp_info("enter %s\n", __func__);
+
+	dev->hist.changed = false;
 	if (!hist->enable) {
 		REG_SET_SLICE(isp_hist_prop, MRV_HIST_MODE, MRV_HIST_MODE_NONE);
 		isp_write_reg(dev, REG_ADDR(isp_hist_prop), isp_hist_prop);
 		isp_write_reg(dev, REG_ADDR(isp_imsc),
 				  isp_imsc & ~MRV_ISP_IMSC_HIST_MEASURE_RDY_MASK);
+		REG_SET_SLICE(isp_ctrl, MRV_ISP_ISP_GEN_CFG_UPD, 1);
+		isp_write_reg(dev, REG_ADDR(isp_ctrl), isp_ctrl);
 		return 0;
 	}
 
@@ -1214,8 +1242,27 @@ int isp_s_hist(struct isp_ic_dev *dev)
 	isp_write_reg(dev, REG_ADDR(isp_hist_prop), isp_hist_prop);
 	isp_write_reg(dev, REG_ADDR(isp_imsc),
 			  isp_imsc | MRV_ISP_IMSC_HIST_MEASURE_RDY_MASK);
+	REG_SET_SLICE(isp_ctrl, MRV_ISP_ISP_GEN_CFG_UPD, 1);
+	isp_write_reg(dev, REG_ADDR(isp_ctrl), isp_ctrl);
 #endif
 	return 0;
+}
+
+int isp_hist_control(struct isp_ic_dev *dev)
+{
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&dev->irqlock, flags);
+	if (!is_isp_enable(dev)) {
+		ret = isp_s_hist(dev);
+	} else {
+		dev->hist.changed = true;
+	}
+
+	spin_unlock_irqrestore(&dev->irqlock, flags);
+
+	return ret;
 }
 
 int isp_g_histmean(struct isp_ic_dev *dev, u32 *mean)
@@ -2422,7 +2469,7 @@ long isp_priv_ioctl(struct isp_ic_dev *dev, unsigned int cmd, void *args)
 	case ISPIOC_S_EXP:
 		viv_check_retval(copy_from_user
 				 (&dev->exp, args, sizeof(dev->exp)));
-		ret = isp_s_exp(dev);
+		ret = isp_exp_control(dev);
 		break;
 	case ISPIOC_S_CNR:
 		viv_check_retval(copy_from_user
@@ -2474,7 +2521,7 @@ long isp_priv_ioctl(struct isp_ic_dev *dev, unsigned int cmd, void *args)
 	case ISPIOC_S_HIST:
 		viv_check_retval(copy_from_user
 				 (&dev->hist, args, sizeof(dev->hist)));
-		ret = isp_s_hist(dev);
+		ret = isp_hist_control(dev);
 		break;
 	case ISPIOC_S_DPCC:
 		viv_check_retval(copy_from_user
