@@ -79,7 +79,7 @@ static long isp_ioctl_compat(struct v4l2_subdev *sd,
 	return isp_priv_ioctl(&isp_dev->ic_dev, cmd, arg);
 }
 
-long isp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+static long isp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	int ret = 0;
 	struct isp_device *isp_dev = v4l2_get_subdevdata(sd);
@@ -89,7 +89,7 @@ long isp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	return ret;
 }
 #else /* CONFIG_COMPAT */
-long isp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+static long isp_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	int ret = 0;
 	struct isp_device *isp_dev = v4l2_get_subdevdata(sd);
@@ -142,7 +142,7 @@ static void isp_disable_clocks(struct isp_device *isp_dev)
 	clk_disable_unprepare(isp_dev->clk_core);
 }
 
-int isp_set_stream(struct v4l2_subdev *sd, int enable)
+static int isp_set_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct isp_device *isp_dev = v4l2_get_subdevdata(sd);
 	pr_info("enter %s %d\n", __func__, enable);
@@ -534,7 +534,7 @@ static int isp_detach_pm_domains(struct isp_device *isp_dev)
 	return 0;
 }
 
-int isp_hw_probe(struct platform_device *pdev)
+static int isp_hw_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct isp_device *isp_dev;
@@ -693,7 +693,7 @@ err_put_isp:
 	return rc;
 }
 
-int isp_hw_remove(struct platform_device *pdev)
+static int isp_hw_remove(struct platform_device *pdev)
 {
 	struct isp_device *isp = platform_get_drvdata(pdev);
 	int rc;
