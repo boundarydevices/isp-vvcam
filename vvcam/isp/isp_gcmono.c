@@ -101,7 +101,9 @@ int isp_disable_gcmono(struct isp_ic_dev *dev)
 #endif
 }
 
-int isp_s_gcmonopx(struct isp_ic_dev *dev, struct isp_gcmono_data *data)
+
+#ifdef ISP_GCMONO
+static int isp_s_gcmonopx(struct isp_ic_dev *dev, struct isp_gcmono_data *data)
 {
 #ifndef ISP_GCMONO
 	pr_err("unsupported function %s", __func__);
@@ -125,7 +127,7 @@ int isp_s_gcmonopx(struct isp_ic_dev *dev, struct isp_gcmono_data *data)
 #endif
 }
 
-int isp_s_gcmonoWriteData(struct isp_ic_dev *dev, u32 *tblX, u32 *tblY)
+static int isp_s_gcmonoWriteData(struct isp_ic_dev *dev, u32 *tblX, u32 *tblY)
 {
 #ifndef ISP_GCMONO
 	pr_err("unsupported function %s", __func__);
@@ -151,6 +153,7 @@ int isp_s_gcmonoWriteData(struct isp_ic_dev *dev, u32 *tblX, u32 *tblY)
 	}
 #endif
 }
+#endif
 
 int isp_s_gcmono(struct isp_ic_dev *dev, struct isp_gcmono_data *data)
 {
