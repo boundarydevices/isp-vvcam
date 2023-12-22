@@ -91,7 +91,8 @@ int isp_disable_rgbgamma(struct isp_ic_dev *dev)
 #endif
 }
 
-int isp_s_rgbgammapx(struct isp_ic_dev *dev, struct isp_rgbgamma_data *data)
+#ifdef ISP_RGBGC
+static int isp_s_rgbgammapx(struct isp_ic_dev *dev, struct isp_rgbgamma_data *data)
 {
 #ifndef ISP_RGBGC
 	pr_err("unsupported function %s\n", __func__);
@@ -137,7 +138,7 @@ int isp_s_rgbgammapx(struct isp_ic_dev *dev, struct isp_rgbgamma_data *data)
    return 0;
 }
 
-int isp_s_rgbgammaWriteData(struct isp_ic_dev *dev,
+static int isp_s_rgbgammaWriteData(struct isp_ic_dev *dev,
 			    struct isp_rgbgamma_data *data)
 {
 #ifndef ISP_RGBGC
@@ -197,6 +198,7 @@ int isp_s_rgbgammaWriteData(struct isp_ic_dev *dev,
     return 0;
 #endif
 }
+#endif
 
 int isp_s_rgbgamma(struct isp_ic_dev *dev, struct isp_rgbgamma_data *data)
 {
