@@ -72,7 +72,7 @@
 
 extern MrvAllRegister_t *all_regs;
 
-void wdr3_hw_init(struct isp_ic_dev *dev)
+static void wdr3_hw_init(struct isp_ic_dev *dev)
 {
 	struct isp_wdr3_context *wdr3 = &dev->wdr3;
 	u32 isp_wdr3_shift_0;
