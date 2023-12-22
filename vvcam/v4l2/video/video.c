@@ -1649,7 +1649,7 @@ static int viv_private_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
-int vidioc_mmap(struct file *file, struct vm_area_struct *vma)
+static int vidioc_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	int rc;
 	struct viv_video_file *handle = priv_to_handle(file->private_data);
