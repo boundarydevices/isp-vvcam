@@ -259,6 +259,26 @@ int isp_s_color_adjust(struct isp_ic_dev *dev);
 int isp_config_dummy_hblank(struct isp_ic_dev *dev);
 int isp_s_wdr(struct isp_ic_dev *dev);
 
+int isp_s_digital_gain(struct isp_ic_dev *dev);
+int isp_s_digital_gain(struct isp_ic_dev *dev);
+int isp_awb_control(struct isp_ic_dev *dev);
+int isp_cc_control(struct isp_ic_dev *dev);
+int isp_enable_gamma_out_ctrl(struct isp_ic_dev *dev, bool bEnable);
+int isp_s_gamma_out_ctrl(struct isp_ic_dev *dev);
+int isp_ioc_read_reg(struct isp_ic_dev *dev, void *__user args);
+int isp_ioc_write_reg(struct isp_ic_dev *dev, void *__user args);
+int isp_ioc_disable_isp_off(struct isp_ic_dev *dev, void *args);
+int isp_s_ca(struct isp_ic_dev *dev);
+int isp_s_flt_ctrl(struct isp_ic_dev *dev);
+u32 get_eff_coeff(int decimal);
+u32 get_afm_shift(u32 count, u32 thresh);
+int isp_cproc_control(struct isp_ic_dev *dev);
+int isp_ioc_qcap(struct isp_ic_dev *dev, void *args);
+int isp_ioc_g_status(struct isp_ic_dev *dev, void *args);
+int isp_ioc_g_feature(struct isp_ic_dev *dev, void *args);
+int isp_ioc_g_feature_veresion(struct isp_ic_dev *dev, void *args);
+int isp_s_wdr_ctrl(struct isp_ic_dev *dev);
+
 #ifdef __KERNEL__
 int clean_dma_buffer(struct isp_ic_dev *dev);
 irqreturn_t isp_hw_isr(int irq, void *data);
