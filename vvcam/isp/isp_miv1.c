@@ -58,7 +58,7 @@
 
 extern MrvAllRegister_t *all_regs;
 
-int getRawBit(u32 type, u32 *bit, u32 *len)
+static int getRawBit(u32 type, u32 *bit, u32 *len)
 {
 	*len = 16;
 	switch (type) {
@@ -120,7 +120,7 @@ int isp_ioc_start_dma_read(struct isp_ic_dev *dev, void *args)
 	return 0;
 }
 
-u32 getScaleFactor(u32 src, u32 dst)
+static u32 getScaleFactor(u32 src, u32 dst)
 {
 	if (dst > src) {
 		return ((65536 * (src - 1)) / (dst - 1));
@@ -130,7 +130,7 @@ u32 getScaleFactor(u32 src, u32 dst)
 	return 65536;
 }
 
-int set_scaling(int id, struct isp_ic_dev *dev, bool stabilization)
+static int set_scaling(int id, struct isp_ic_dev *dev, bool stabilization)
 {
 	u32 addr, ctrl;
 	u32 iw, ih, ow, oh;
