@@ -62,13 +62,13 @@
 
 static struct dwe_device *pdwe_dev[DEWARP_NODE_NUM] = {NULL};
 
-int dwe_subscribe_event(struct v4l2_subdev *sd, struct v4l2_fh *fh,
+static int dwe_subscribe_event(struct v4l2_subdev *sd, struct v4l2_fh *fh,
 			struct v4l2_event_subscription *sub)
 {
 	return v4l2_event_subscribe(fh, sub, 2, NULL);
 }
 
-int dwe_unsubscribe_event(struct v4l2_subdev *sd, struct v4l2_fh *fh,
+static int dwe_unsubscribe_event(struct v4l2_subdev *sd, struct v4l2_fh *fh,
 			  struct v4l2_event_subscription *sub)
 {
 	return v4l2_event_unsubscribe(fh, sub);
@@ -81,7 +81,7 @@ static long dwe_ioctl_compat(struct v4l2_subdev *sd,
 	return dwe_devcore_ioctl(v4l2_get_subdevdata(sd), cmd, arg);
 }
 
-long dwe_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+static long dwe_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	int ret = 0;
 	struct dwe_device *dwe_dev = v4l2_get_subdevdata(sd);
@@ -92,7 +92,7 @@ long dwe_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	return ret;
 }
 #else /* CONFIG_COMPAT */
-long dwe_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
+static long dwe_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 {
 	int ret = 0;
 
@@ -138,7 +138,7 @@ static void dwe_disable_clocks(struct dwe_device *dwe_dev)
 	clk_disable_unprepare(dwe_dev->clk_core);
 }
 
-int dwe_set_stream(struct v4l2_subdev *sd, int enable)
+static int dwe_set_stream(struct v4l2_subdev *sd, int enable)
 {
 	struct dwe_device *dwe_dev = v4l2_get_subdevdata(sd);
 	struct vvbuf_ctx *ctx;
@@ -332,7 +332,7 @@ static const struct v4l2_subdev_internal_ops dwe_internal_ops = {
 struct v4l2_subdev *g_dwe_subdev[DEWARP_NODE_NUM] = {NULL};
 EXPORT_SYMBOL_GPL(g_dwe_subdev);
 
-int dwe_hw_probe(struct platform_device *pdev)
+static int dwe_hw_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct dwe_device *dwe_dev;
@@ -471,7 +471,7 @@ dewarp_destory_fake_pdev:
 	return rc;
 }
 
-int dwe_hw_remove(struct platform_device *pdev)
+static int dwe_hw_remove(struct platform_device *pdev)
 {
 	struct dwe_device *dwe_dev;
 	int dev_id;

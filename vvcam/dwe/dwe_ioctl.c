@@ -167,13 +167,13 @@ int dwe_read_irq(struct dwe_ic_dev *dev, u32 *ret)
 	return 0;
 }
 
-int dwe_start(struct dwe_ic_dev *dev)
+static int dwe_start(struct dwe_ic_dev *dev)
 {
 	dwe_write_reg(dev, DEWARP_CTRL, 0x4C800001);
 	return 0;
 }
 
-int dwe_stop(struct dwe_ic_dev *dev)
+static int dwe_stop(struct dwe_ic_dev *dev)
 {
 	dwe_enable_bus(dev, 0);
 	dwe_write_reg(dev, DEWARP_CTRL, 0x4C800000);
@@ -222,7 +222,7 @@ int dwe_set_lut(struct dwe_ic_dev *dev, u64 addr)
 	return 0;
 }
 
-int dwe_ioc_qcap(struct dwe_ic_dev *dev, void *args)
+static int dwe_ioc_qcap(struct dwe_ic_dev *dev, void *args)
 {
 	struct v4l2_capability *cap = (struct v4l2_capability *)args;
 
