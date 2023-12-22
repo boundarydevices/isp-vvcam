@@ -352,7 +352,7 @@ static struct vvcam_mode_info_s pov2775_mode_info[] = {
 	},
 };
 
-int ov2775_get_clk(struct ov2775 *sensor, void *clk)
+static int ov2775_get_clk(struct ov2775 *sensor, void *clk)
 {
 	struct vvcam_clk_s vvcam_clk;
 	int ret = 0;
