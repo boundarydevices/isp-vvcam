@@ -223,7 +223,7 @@ static struct vvcam_mode_info_s par1335_mode_info[] = {
 
 };
 
-int ar1335_get_clk(struct ar1335 *sensor, void *clk)
+static int ar1335_get_clk(struct ar1335 *sensor, void *clk)
 {
 	struct vvcam_clk_s vvcam_clk;
 	int ret = 0;
