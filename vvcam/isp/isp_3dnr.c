@@ -59,7 +59,7 @@
 
 extern MrvAllRegister_t *all_regs;
 
-
+#ifdef ISP_3DNR
 void dnr3_hw_init(struct isp_ic_dev *dev)
 {
 	struct isp_3dnr_context *dnr3 = &dev->dnr3;
@@ -167,6 +167,7 @@ void dnr3_hw_init(struct isp_ic_dev *dev)
 	REG_SET_SLICE(regVal, DENOISE3D_UPDATE_TEMPERAL, update_temperal);
 	isp_write_reg(dev, REG_ADDR(isp_denoise3d_strength), regVal);
 }
+#endif
 
 int isp_s_3dnr_cmp(struct isp_ic_dev *dev) {
 #ifndef ISP_3DNR
