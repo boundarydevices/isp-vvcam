@@ -1006,7 +1006,7 @@ static int video_querycap(struct file *file, void *fh,
 				"platform:viv%d", dev->id);
 
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE |
-			V4L2_CAP_STREAMING | V4L2_CAP_DEVICE_CAPS | V4L2_CAP_TIMEPERFRAME;
+			V4L2_CAP_STREAMING | V4L2_CAP_DEVICE_CAPS;
 	cap->device_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
 	return 0;
 }
