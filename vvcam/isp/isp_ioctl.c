@@ -1118,7 +1118,7 @@ int isp_s_exp(struct isp_ic_dev *dev)
 	return 0;
 }
 
-int isp_exp_control(struct isp_ic_dev *dev)
+static int isp_exp_control(struct isp_ic_dev *dev)
 {
 	unsigned long flags;
 	int ret = 0;
@@ -1248,7 +1248,7 @@ int isp_s_hist(struct isp_ic_dev *dev)
 	return 0;
 }
 
-int isp_hist_control(struct isp_ic_dev *dev)
+static int isp_hist_control(struct isp_ic_dev *dev)
 {
 	unsigned long flags;
 	int ret = 0;
