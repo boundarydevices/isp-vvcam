@@ -6,7 +6,7 @@ obj-m +=$(TARGET).o
 $(TARGET)-objs += imx219_mipi_v3.o
 
 ccflags-y += -I$(PWD)/../../../common/
-ccflags-y += -O2 -Werror
+ccflags-y += -O2 -Werror -Wno-frame-larger-than
 
 ARCH_TYPE ?= arm64
 ANDROID ?= no
