@@ -28,6 +28,7 @@ vvcam: $(VVCAM_KERNELENVSH) $(VVCAM_SRC_PATH)
 		$(KERNEL_CFLAGS) \
 		ARCH_TYPE=$(ARCH_TYPE) \
 		DEBUG=$(DEBUG);
+	cp $(VVCAM_SRC_PATH)/sensor/imx219/imx219.ko $(VVCAM_OUT);
 	cp $(VVCAM_SRC_PATH)/sensor/ov2775/ov2775.ko $(VVCAM_OUT);
 	cp $(VVCAM_SRC_PATH)/sensor/camera-proxy-driver/basler-camera-driver-vvcam.ko $(VVCAM_OUT);
 	cp $(VVCAM_SRC_PATH)/sensor/os08a20/os08a20.ko $(VVCAM_OUT);
